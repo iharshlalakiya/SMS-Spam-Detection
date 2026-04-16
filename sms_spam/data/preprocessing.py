@@ -9,12 +9,17 @@ Provides functions for text cleaning and preprocessing:
 - Complete preprocessing pipeline
 """
 
+import sys
 import re
+import pickle
+import yaml
+from pathlib import Path
 import pandas as pd
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk.stem import WordNetLemmatizer
+from sklearn.model_selection import train_test_split
 
 
 def download_nltk_data():
@@ -199,6 +204,49 @@ def demonstrate_preprocessing(text):
     return final
 
 
+def run_dvc_stage(raw_path: Path, out_path: Path, test_size: float, random_state: int) -> None:
+    print(f"Loading raw data from {raw_path}")
+    df = load_data(str(raw_path))
+    df = df.rename(columns={"v1": "label", "v2": "message"})
+    df = df[["label", "message"]]
+    df = preprocess_pipeline(df, text_column="message")
+    df["label"] = (df["label"] == "spam").astype(int)
+    print(f"Loaded {len(df)} records — spam={df['label'].sum()}  ham={(df['label'] == 0).sum()}")
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        df["processed_text"], df["label"],
+        test_size=test_size,
+        random_state=random_state,
+        stratify=df["label"],
+    )
+    print(f"Split — train={len(X_train)}  test={len(X_test)}")
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    payload = dict(X_train=X_train, X_test=X_test,
+                   y_train=y_train, y_test=y_test)
+    with open(out_path, "wb") as f:
+        pickle.dump(payload, f)
+    print(f"Saved processed split -> {out_path}")
+
+
 if __name__ == "__main__":
-    sample = "WINNER!! You have won a FREE prize! Call 08001234567 NOW!"
-    demonstrate_preprocessing(sample)
+    if len(sys.argv) > 1 and sys.argv[1] == "--demo":
+        sample = "WINNER!! You have won a FREE prize! Call 08001234567 NOW!"
+        demonstrate_preprocessing(sample)
+    else:
+        import sys
+        # DVC Execution
+        ROOT = Path(__file__).resolve().parents[2]
+        with open(ROOT / "params.yaml") as f:
+            params = yaml.safe_load(f)
+
+        raw_path = ROOT / params["data"]["raw_path"]
+        out_path = ROOT / params["data"]["processed_path"]
+
+        run_dvc_stage(
+            raw_path=raw_path,
+            out_path=out_path,
+            test_size=params["data"]["test_size"],
+            random_state=params["data"]["random_state"],
+        )
+        print(f"[stage_preprocess] DONE  Saved -> {out_path}")

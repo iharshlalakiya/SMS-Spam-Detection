@@ -1,0 +1,128 @@
+schema: '2.0'
+stages:
+  download:
+    cmd: python -m sms_spam.data.download
+    deps:
+    - path: sms_spam/data/download.py
+      hash: md5
+      md5: d2ae52e4713301f43847676f6f3c964a
+      size: 2483
+    params:
+      params.yaml:
+        data.raw_path: data/raw/spam.csv
+    outs:
+    - path: data/raw/spam.csv
+      hash: md5
+      md5: 008dcf9ca6aab621d3b3831db6815867
+      size: 503663
+  preprocess:
+    cmd: python -m sms_spam.data.preprocessing
+    deps:
+    - path: data/raw/spam.csv
+      hash: md5
+      md5: 008dcf9ca6aab621d3b3831db6815867
+      size: 503663
+    - path: sms_spam/data/preprocessing.py
+      hash: md5
+      md5: feb585c6fe98c7f85d75c39d3076c34f
+      size: 7862
+    params:
+      params.yaml:
+        data.processed_path: data/processed/processed.pkl
+        data.random_state: 42
+        data.raw_path: data/raw/spam.csv
+        data.test_size: 0.2
+    outs:
+    - path: data/processed/processed.pkl
+      hash: md5
+      md5: aea4ec173bf37bf630e164068295a1f4
+      size: 496721
+  featurize:
+    cmd: python -m sms_spam.features.extraction
+    deps:
+    - path: data/processed/processed.pkl
+      hash: md5
+      md5: aea4ec173bf37bf630e164068295a1f4
+      size: 496721
+    - path: sms_spam/features/extraction.py
+      hash: md5
+      md5: b255201a096f44fd54337c376d342cfe
+      size: 6183
+    params:
+      params.yaml:
+        data.features_path: data/processed/features.pkl
+        data.processed_path: data/processed/processed.pkl
+        tfidf:
+          max_features: 5000
+          ngram_range:
+          - 1
+          - 2
+          min_df: 1
+          sublinear_tf: true
+    outs:
+    - path: data/processed/features.pkl
+      hash: md5
+      md5: 169a82a33082f9d7de0ff89a7740769e
+      size: 652971
+    - path: models/tfidf_vectorizer.pkl
+      hash: md5
+      md5: 9e4131c37fed58dc0e7ab22563b9475c
+      size: 171760
+  train:
+    cmd: python -m sms_spam.train.train
+    deps:
+    - path: data/processed/features.pkl
+      hash: md5
+      md5: 169a82a33082f9d7de0ff89a7740769e
+      size: 652971
+    - path: sms_spam/train/train.py
+      hash: md5
+      md5: a1c81f9362d1d14aebd5c88cba16ff93
+      size: 4479
+    params:
+      params.yaml:
+        data.features_path: data/processed/features.pkl
+        paths.models_dir: models
+        svm:
+          C: 1.0
+          kernel: linear
+          max_iter: 1000
+          probability: true
+    outs:
+    - path: models/svm.pkl
+      hash: md5
+      md5: cd5b654a0421e84dad0e0533352d4a88
+      size: 132076
+  evaluate:
+    cmd: python -m sms_spam.evaluation.evaluate
+    deps:
+    - path: data/processed/features.pkl
+      hash: md5
+      md5: 169a82a33082f9d7de0ff89a7740769e
+      size: 652971
+    - path: models/svm.pkl
+      hash: md5
+      md5: cd5b654a0421e84dad0e0533352d4a88
+      size: 132076
+    - path: sms_spam/evaluation/evaluate.py
+      hash: md5
+      md5: 45a022fa17c4fbbf3d778a5524c1cbbb
+      size: 7842
+    params:
+      params.yaml:
+        data.features_path: data/processed/features.pkl
+        paths.models_dir: models
+        paths.results_dir: results
+    outs:
+    - path: results/confusion_matrices/svm_cm.png
+      hash: md5
+      md5: 6cee50ee0bfc9a1fa232c67911541d15
+      size: 33158
+    - path: results/metrics/svm_results.json
+      hash: md5
+      md5: c00959ea5d67b9ccb956fe28725db2cc
+      size: 204
+    - path: results/plots/svm_roc.png
+      hash: md5
+      md5: c5bb1b7b063dadfbbb72d6ddf469fc96
+      size: 55526

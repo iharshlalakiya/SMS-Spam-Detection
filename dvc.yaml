@@ -1,0 +1,94 @@
+# =============================================================================
+# dvc.yaml — DVC Pipeline Definition
+# =============================================================================
+# Run the full pipeline with:
+#   dvc repro
+#
+# View the DAG with:
+#   dvc dag
+#
+# Show tracked metrics with:
+#   dvc metrics show
+#
+# Compare across git commits with:
+#   dvc metrics diff
+# =============================================================================
+
+stages:
+
+  # ── Stage 1: Download ───────────────────────────────────────────────────────
+  download:
+    cmd: python -m sms_spam.data.download
+    deps:
+      - sms_spam/data/download.py
+    params:
+      - data.raw_path
+    outs:
+      - data/raw/spam.csv:
+          cache: true
+
+  # ── Stage 2: Preprocess & Split ─────────────────────────────────────────────
+  preprocess:
+    cmd: python -m sms_spam.data.preprocessing
+    deps:
+      - sms_spam/data/preprocessing.py
+      - data/raw/spam.csv
+    params:
+      - data.raw_path
+      - data.processed_path
+      - data.test_size
+      - data.random_state
+    outs:
+      - data/processed/processed.pkl:
+          cache: true
+
+  # ── Stage 3: TF-IDF Featurization ───────────────────────────────────────────
+  featurize:
+    cmd: python -m sms_spam.features.extraction
+    deps:
+      - sms_spam/features/extraction.py
+      - data/processed/processed.pkl
+    params:
+      - data.processed_path
+      - data.features_path
+      - tfidf
+    outs:
+      - data/processed/features.pkl:
+          cache: true
+      - models/tfidf_vectorizer.pkl:
+          cache: true
+
+  # ── Stage 4: Train SVM ───────────────────────────────────────────────────────
+  train:
+    cmd: python -m sms_spam.train.train
+    deps:
+      - sms_spam/train/train.py
+      - data/processed/features.pkl
+    params:
+      - data.features_path
+      - svm
+      - paths.models_dir
+    outs:
+      - models/svm.pkl:
+          cache: true
+
+  # ── Stage 5: Evaluate ────────────────────────────────────────────────────────
+  evaluate:
+    cmd: python -m sms_spam.evaluation.evaluate
+    deps:
+      - sms_spam/evaluation/evaluate.py
+      - data/processed/features.pkl
+      - models/svm.pkl
+    params:
+      - data.features_path
+      - paths.models_dir
+      - paths.results_dir
+    metrics:
+      - results/metrics/svm_results.json:
+          cache: false
+    plots:
+      - results/confusion_matrices/svm_cm.png:
+          cache: false
+      - results/plots/svm_roc.png:
+          cache: false
+

@@ -1,3 +1,13 @@
 .venv/
 __pycache__/
 logs/
+
+# ── DVC-tracked data & model artefacts (use .dvc pointer files instead) ──
+data/raw/spam.csv
+data/processed/
+models/*.pkl
+results/confusion_matrices/
+results/plots/
+
+# ── DVC internal cache ────────────────────────────────────────────────────
+/tmp

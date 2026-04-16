@@ -22,5 +22,9 @@ streamlit>=1.32
 # Testing
 pytest>=7.4
 
+# DVC — Data Version Control
+dvc>=3.0
+pyyaml>=6.0
+
 # Optional: dataset download
 # kaggle>=1.6

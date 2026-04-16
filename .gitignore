@@ -1,6 +1,7 @@
 .venv/
 __pycache__/
-logs/
+/logs/
+*.log
 
 # ── DVC-tracked data & model artefacts (use .dvc pointer files instead) ──
 data/raw/spam.csv

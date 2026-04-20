@@ -14,4 +14,7 @@ results/plots/
 /tmp
 
 # ── MLflow tracking data (auto-generated, do not commit) ─────────────────
-mlruns/
+mlruns/
+
+# ── Azure VM SSH keys (if applicable) ───────────────────────────────────────────────
+*.pem

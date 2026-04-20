@@ -52,3 +52,22 @@ jobs:
         echo "  MLflow run logged to:"
         echo "  ${{ secrets.MLFLOW_TRACKING_URI }}"
         echo "========================================"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test-and-reproduce
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+    - name: Deploy to Azure VM
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host:     ${{ secrets.VM_HOST }}
+        username: ${{ secrets.VM_USER }}
+        key:      ${{ secrets.VM_SSH_KEY }}
+        script: |
+          cd /home/azureuser/SMS-Spam-Detection
+          git pull origin main
+          .venv/bin/pip install -r requirements.txt --quiet
+          sudo systemctl restart streamlit
+          sudo systemctl status streamlit --no-pager

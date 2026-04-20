@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 from sms_spam.data.preprocessing import preprocess_text
 from sms_spam.models.svm import SpamDetector
+from sms_spam.features.extraction import TFIDFExtractor  # noqa: F401 — required for pickle to deserialize tfidf_vectorizer.pkl
 from sms_spam.logs.logger import get_logger
 
 log = get_logger("sms_spam.app", log_to_console=False)

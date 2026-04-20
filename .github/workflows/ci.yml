@@ -29,11 +29,26 @@ jobs:
 
     - name: Run unit tests
       run: |
-        # Run pytest and stop the pipeline if any tests fail
         pytest tests/ -v
 
-    - name: Validate ML Pipeline (DVC)
+    - name: Reproduce DVC pipeline with MLflow tracking
+      # MLflow is logged inside the evaluate stage (sms_spam/evaluation/evaluate.py).
+      # Secrets are set in: GitHub repo → Settings → Secrets and variables → Actions
+      # Required secrets:
+      #   MLFLOW_TRACKING_URI      = https://dagshub.com/<user>/SMS-Spam-Detection.mlflow
+      #   MLFLOW_TRACKING_USERNAME = <dagshub_username>
+      #   MLFLOW_TRACKING_PASSWORD = <dagshub_access_token>
+      env:
+        MLFLOW_TRACKING_URI:      ${{ secrets.MLFLOW_TRACKING_URI }}
+        MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
+        MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
       run: |
-        # Pulls the raw dataset from the web and actively recreates the model 
-        # to ensure the reproduction chain is completely healthy on this PR!
         dvc repro
+
+    - name: Print MLflow tracking summary
+      if: always()
+      run: |
+        echo "========================================"
+        echo "  MLflow run logged to:"
+        echo "  ${{ secrets.MLFLOW_TRACKING_URI }}"
+        echo "========================================"

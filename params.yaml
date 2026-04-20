@@ -32,3 +32,9 @@ svm:
 paths:
   models_dir: models
   results_dir: results
+
+mlflow:
+  experiment_name: "SMS-Spam-Detection"
+  tracking_uri: "mlruns"
+  register_model: true
+  model_name: "SmsSpamDetector"

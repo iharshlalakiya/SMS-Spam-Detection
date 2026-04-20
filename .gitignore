@@ -11,4 +11,7 @@ results/confusion_matrices/
 results/plots/
 
 # ── DVC internal cache ────────────────────────────────────────────────────
-/tmp
+/tmp
+
+# ── MLflow tracking data (auto-generated, do not commit) ─────────────────
+mlruns/

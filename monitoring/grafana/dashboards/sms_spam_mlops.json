@@ -1,0 +1,164 @@
+{
+  "title": "SMS Spam Detection — MLOps",
+  "uid": "sms-spam-mlops",
+  "timezone": "browser",
+  "refresh": "30s",
+  "panels": [
+
+    { "id": 1, "title": "Model Accuracy (MLflow)", "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "mlflow_model_accuracy", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "steps": [
+        { "color": "red", "value": 0 }, { "color": "yellow", "value": 0.95 }, { "color": "green", "value": 0.97 }
+      ]}}}
+    },
+
+    { "id": 2, "title": "Model F1 Score (MLflow)", "type": "stat",
+      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "mlflow_model_f1_score", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "steps": [
+        { "color": "red", "value": 0 }, { "color": "yellow", "value": 0.90 }, { "color": "green", "value": 0.92 }
+      ]}}}
+    },
+
+    { "id": 3, "title": "ROC AUC (MLflow)", "type": "stat",
+      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "mlflow_model_roc_auc", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }}
+    },
+
+    { "id": 4, "title": "Total MLflow Runs", "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "mlflow_total_runs", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+
+    { "id": 5, "title": "Model Loaded", "type": "stat",
+      "gridPos": { "x": 16, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "sms_model_loaded", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "mappings": [
+        { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } }
+      ]}}
+    },
+
+    { "id": 20, "title": "Training Time (MLflow)", "type": "stat",
+      "gridPos": { "x": 20, "y": 0, "w": 4, "h": 4 },
+      "targets": [{ "expr": "mlflow_training_time_s", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "s" }}
+    },
+
+    { "id": 21, "title": "DVC — Model Accuracy", "type": "stat",
+      "gridPos": { "x": 0, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_model_accuracy", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "steps": [
+        { "color": "red", "value": 0 }, { "color": "yellow", "value": 0.95 }, { "color": "green", "value": 0.97 }
+      ]}}}
+    },
+
+    { "id": 22, "title": "DVC — F1 Score", "type": "stat",
+      "gridPos": { "x": 4, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_model_f1_score", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }}
+    },
+
+    { "id": 23, "title": "DVC — Precision", "type": "stat",
+      "gridPos": { "x": 8, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_model_precision", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }}
+    },
+
+    { "id": 24, "title": "DVC — Recall", "type": "stat",
+      "gridPos": { "x": 12, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_model_recall", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } },
+      "fieldConfig": { "defaults": { "unit": "percentunit" }}
+    },
+
+    { "id": 25, "title": "DVC — SVM C Param", "type": "stat",
+      "gridPos": { "x": 16, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_param_svm_c", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+
+    { "id": 26, "title": "DVC — TF-IDF Max Features", "type": "stat",
+      "gridPos": { "x": 20, "y": 4, "w": 4, "h": 4 },
+      "targets": [{ "expr": "dvc_param_tfidf_max_features", "datasource": "Prometheus" }],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+
+    { "id": 27, "title": "DVC — Pipeline Artifact Sizes", "type": "bargauge",
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "dvc_stage_model_size_bytes",      "legendFormat": "svm.pkl",              "datasource": "Prometheus" },
+        { "expr": "dvc_stage_vectorizer_size_bytes",  "legendFormat": "tfidf_vectorizer.pkl", "datasource": "Prometheus" },
+        { "expr": "dvc_stage_features_size_bytes",    "legendFormat": "features.pkl",         "datasource": "Prometheus" },
+        { "expr": "dvc_stage_processed_size_bytes",   "legendFormat": "processed.pkl",        "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" }}
+    },
+
+    { "id": 28, "title": "DVC vs MLflow — Accuracy Comparison", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 6 },
+      "targets": [
+        { "expr": "dvc_model_accuracy",    "legendFormat": "DVC accuracy",    "datasource": "Prometheus" },
+        { "expr": "mlflow_model_accuracy", "legendFormat": "MLflow accuracy",  "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percentunit" }}
+    },
+
+    { "id": 6, "title": "Predictions Over Time", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(sms_predictions_total{result=\"spam\"}[5m])", "legendFormat": "Spam", "datasource": "Prometheus" },
+        { "expr": "rate(sms_predictions_total{result=\"ham\"}[5m])",  "legendFormat": "Ham",  "datasource": "Prometheus" }
+      ]
+    },
+
+    { "id": 7, "title": "Prediction Latency p95", "type": "timeseries",
+      "gridPos": { "x": 12, "y": 14, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.95, rate(sms_prediction_latency_seconds_bucket[5m]))", "legendFormat": "p95", "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }}
+    },
+
+    { "id": 8, "title": "CPU Usage %", "type": "timeseries",
+      "gridPos": { "x": 0, "y": 22, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "legendFormat": "CPU %", "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" }}
+    },
+
+    { "id": 9, "title": "Memory Usage %", "type": "timeseries",
+      "gridPos": { "x": 8, "y": 22, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat": "RAM %", "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" }}
+    },
+
+    { "id": 10, "title": "Disk Usage %", "type": "timeseries",
+      "gridPos": { "x": 16, "y": 22, "w": 8, "h": 8 },
+      "targets": [
+        { "expr": "100 - (node_filesystem_avail_bytes{mountpoint=\"/\"} / node_filesystem_size_bytes{mountpoint=\"/\"} * 100)", "legendFormat": "Disk %", "datasource": "Prometheus" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "percent" }}
+    },
+
+    { "id": 11, "title": "App Logs", "type": "logs",
+      "gridPos": { "x": 0, "y": 30, "w": 24, "h": 8 },
+      "targets": [
+        { "expr": "{app=\"sms-spam-detector\"}", "datasource": "Loki" }
+      ]
+    }
+  ]
+}

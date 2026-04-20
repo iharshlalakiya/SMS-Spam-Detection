@@ -20,6 +20,9 @@ from sms_spam.data.preprocessing import preprocess_text
 from sms_spam.models.svm import SpamDetector
 from sms_spam.features.extraction import TFIDFExtractor  # noqa: F401 — required for pickle to deserialize tfidf_vectorizer.pkl
 from sms_spam.logs.logger import get_logger
+from monitoring.app_metrics import start_metrics_server, record_prediction, record_error, set_model_loaded
+
+start_metrics_server(9300)
 
 log = get_logger("sms_spam.app", log_to_console=False)
 
@@ -214,6 +217,7 @@ def load_model():
     detector.load(str(svm_path))
     tfidf = joblib.load(str(tfidf_path))
     log.info("Model loaded successfully from %s", models_dir)
+    set_model_loaded(True)
     return detector, tfidf
 
 
@@ -323,7 +327,9 @@ if analyse:
     else:
         with st.spinner("Analysing..."):
             time.sleep(0.3)   # tiny delay for UX feel
+            t0 = time.time()
             label, spam_prob, ham_prob = predict(text, detector, tfidf)
+            record_prediction(label, time.time() - t0)
             log.info("Prediction: %s (spam=%.1f%%) | input=%r", "SPAM" if label else "HAM", spam_prob, text[:60])
 
         # Result card

@@ -1,0 +1,73 @@
+groups:
+  - name: sms_spam_alerts
+    rules:
+
+      # Model accuracy dropped below 95%
+      - alert: ModelAccuracyLow
+        expr: dvc_model_accuracy < 0.95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Model accuracy dropped"
+          description: "DVC model accuracy is {{ $value | humanizePercentage }}, below 0.95 threshold."
+
+      # Model F1 score dropped below 90%
+      - alert: ModelF1Low
+        expr: dvc_model_f1_score < 0.90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Model F1 score dropped"
+          description: "DVC model F1 is {{ $value | humanizePercentage }}, below 0.90 threshold."
+
+      # Streamlit app model not loaded
+      - alert: ModelNotLoaded
+        expr: sms_model_loaded == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Streamlit model not loaded"
+          description: "The SMS spam model failed to load. App is not functional."
+
+      # High error rate
+      - alert: HighErrorRate
+        expr: rate(sms_app_errors_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High app error rate"
+          description: "App error rate is {{ $value }} errors/sec."
+
+      # High CPU usage
+      - alert: HighCPU
+        expr: 100 - (avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on Azure VM"
+          description: "CPU usage is {{ $value }}%."
+
+      # High memory usage
+      - alert: HighMemory
+        expr: 100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on Azure VM"
+          description: "Memory usage is {{ $value }}%."
+
+      # Low disk space
+      - alert: LowDiskSpace
+        expr: 100 - (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"} * 100) > 80
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space on Azure VM"
+          description: "Disk usage is {{ $value }}%. Clean up mlruns/ or data/."

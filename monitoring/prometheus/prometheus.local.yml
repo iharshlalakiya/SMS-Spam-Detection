@@ -1,0 +1,36 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - "alerts.yml"
+
+scrape_configs:
+
+  # Streamlit app running on Windows host
+  - job_name: "streamlit-app"
+    static_configs:
+      - targets: ["host.docker.internal:9300"]
+        labels:
+          app: "sms-spam-detector"
+
+  - job_name: "mlflow-exporter"
+    static_configs:
+      - targets: ["mlflow-exporter:9200"]
+        labels:
+          app: "mlflow"
+
+  - job_name: "dvc-exporter"
+    static_configs:
+      - targets: ["dvc-exporter:9400"]
+        labels:
+          app: "dvc"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

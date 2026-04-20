@@ -1,0 +1,29 @@
+server:
+  http_listen_port: 9080
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+
+  # ── SMS Spam app logs ──────────────────────────────────────────────────────
+  - job_name: sms_spam_app
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: sms_spam
+          app: sms-spam-detector
+          __path__: /var/log/sms_spam/*.log
+
+  # ── System logs ───────────────────────────────────────────────────────────
+  - job_name: system
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: system
+          __path__: /var/log/host/syslog

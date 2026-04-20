@@ -32,12 +32,6 @@ jobs:
         pytest tests/ -v
 
     - name: Reproduce DVC pipeline with MLflow tracking
-      # MLflow is logged inside the evaluate stage (sms_spam/evaluation/evaluate.py).
-      # Secrets are set in: GitHub repo → Settings → Secrets and variables → Actions
-      # Required secrets:
-      #   MLFLOW_TRACKING_URI      = https://dagshub.com/<user>/SMS-Spam-Detection.mlflow
-      #   MLFLOW_TRACKING_USERNAME = <dagshub_username>
-      #   MLFLOW_TRACKING_PASSWORD = <dagshub_access_token>
       env:
         MLFLOW_TRACKING_URI:      ${{ secrets.MLFLOW_TRACKING_URI }}
         MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
@@ -66,42 +60,45 @@ jobs:
         username: ${{ secrets.VM_USER }}
         key:      ${{ secrets.VM_SSH_KEY }}
         script: |
-          set -e  # Exit immediately on any error
-
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Starting deployment on Azure VM"
-          echo "  $(date)"
-          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
+          set -e
           export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
           cd /home/azureuser/SMS-Spam-Detection
 
-          echo "→ Pulling latest code from GitHub..."
+          echo "-> Pulling latest code..."
           git fetch origin main
           git reset --hard origin/main
 
-          echo "→ Installing/updating Python dependencies..."
+          echo "-> Installing dependencies..."
           pip install -r requirements.txt --quiet
 
-          echo "→ Reproducing pipeline on VM (train & evaluate)..."
+          echo "-> Reproducing DVC pipeline if stale..."
           dvc repro
 
-          echo "→ Restarting Streamlit service..."
+          echo "-> Restarting Streamlit service..."
           sudo systemctl restart streamlit
-
-          echo "→ Checking service status..."
           sudo systemctl status streamlit --no-pager
 
+          echo "-> Restarting monitoring stack..."
+          cd monitoring
+          docker compose pull --quiet
+          docker compose up -d
+          cd ..
+
+          echo "-> Checking all containers..."
+          docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
           echo ""
-          echo "✅ Deployment completed successfully!"
-          echo "   App is live at: http://${{ secrets.VM_HOST }}"
+          echo "Deployment complete!"
+          echo "  App:        http://${{ secrets.VM_HOST }}"
+          echo "  Grafana:    http://${{ secrets.VM_HOST }}:3000"
+          echo "  Prometheus: http://${{ secrets.VM_HOST }}:9090"
 
     - name: Deployment summary
       if: always()
       run: |
         echo "================================================"
         echo "  Deploy job finished"
-        echo "  Target: ${{ secrets.VM_HOST }}"
+        echo "  Target:      ${{ secrets.VM_HOST }}"
         echo "  Triggered by: ${{ github.actor }}"
-        echo "  Commit: ${{ github.sha }}"
+        echo "  Commit:      ${{ github.sha }}"
         echo "================================================"

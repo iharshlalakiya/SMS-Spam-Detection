@@ -73,6 +73,7 @@ jobs:
           echo "  $(date)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
+          export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
           cd /home/azureuser/SMS-Spam-Detection
 
           echo "→ Pulling latest code from GitHub..."
@@ -80,11 +81,10 @@ jobs:
           git reset --hard origin/main
 
           echo "→ Installing/updating Python dependencies..."
-          .venv/bin/pip install -r requirements.txt --quiet
+          pip install -r requirements.txt --quiet
 
           echo "→ Reproducing pipeline on VM (train & evaluate)..."
-          export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
-          .venv/bin/dvc repro
+          dvc repro
 
           echo "→ Restarting Streamlit service..."
           sudo systemctl restart streamlit

@@ -3,18 +3,23 @@ __pycache__/
 /logs/
 *.log
 
-# ── DVC-tracked data & model artefacts (use .dvc pointer files instead) ──
+# DVC-tracked data & model artefacts
 data/raw/spam.csv
 data/processed/
 models/*.pkl
 results/confusion_matrices/
 results/plots/
 
-# ── DVC internal cache ────────────────────────────────────────────────────
+# DVC internal cache
 /tmp
 
-# ── MLflow tracking data (auto-generated, do not commit) ─────────────────
+# MLflow tracking data (auto-generated)
 mlruns/
 
-# ── Azure VM SSH keys (if applicable) ───────────────────────────────────────────────
+# Azure VM SSH keys
 *.pem
+
+# Monitoring docker volumes (managed by docker, not git)
+monitoring/grafana/data/
+monitoring/prometheus/data/
+monitoring/loki/data/

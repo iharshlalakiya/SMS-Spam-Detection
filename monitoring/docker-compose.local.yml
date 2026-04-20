@@ -1,0 +1,122 @@
+networks:
+  monitoring:
+    driver: bridge
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  loki_data:
+  alertmanager_data:
+
+services:
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/prometheus.local.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"
+    networks:
+      - monitoring
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: alertmanager
+    restart: unless-stopped
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    ports:
+      - "9093:9093"
+    networks:
+      - monitoring
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_UNIFIED_ALERTING_ENABLED=true
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    restart: unless-stopped
+    volumes:
+      - ./loki/loki-config.yml:/etc/loki/local-config.yaml
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - monitoring
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    restart: unless-stopped
+    volumes:
+      - ./promtail/promtail-config.yml:/etc/promtail/config.yml
+      - ../logs:/var/log/sms_spam:ro
+    networks:
+      - monitoring
+    depends_on:
+      - loki
+
+  mlflow-exporter:
+    image: python:3.11-slim
+    container_name: mlflow-exporter
+    restart: unless-stopped
+    volumes:
+      - ../:/app
+    working_dir: /app
+    environment:
+      - MLFLOW_TRACKING_URI=mlruns
+      - MLFLOW_EXPERIMENT_NAME=SMS-Spam-Detection
+      - SCRAPE_INTERVAL=30
+    command: >
+      sh -c "pip install mlflow prometheus-client --quiet &&
+             python monitoring/mlflow_exporter.py"
+    ports:
+      - "9200:9200"
+    networks:
+      - monitoring
+
+  dvc-exporter:
+    image: python:3.11-slim
+    container_name: dvc-exporter
+    restart: unless-stopped
+    volumes:
+      - ../:/app
+    working_dir: /app
+    environment:
+      - PROJECT_DIR=/app
+      - SCRAPE_INTERVAL=30
+    command: >
+      sh -c "pip install prometheus-client pyyaml --quiet &&
+             python monitoring/dvc_exporter.py"
+    ports:
+      - "9400:9400"
+    networks:
+      - monitoring

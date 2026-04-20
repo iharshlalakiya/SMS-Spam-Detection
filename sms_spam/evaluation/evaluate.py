@@ -26,6 +26,7 @@ from sms_spam.evaluation.metrics  import (
     plot_confusion_matrix,
     plot_roc_curve,
 )
+from sms_spam.mlflow import MlflowTracker
 from sms_spam.logs.logger import get_logger
 
 log = get_logger(__name__)
@@ -102,7 +103,8 @@ def step_evaluate(
     return metrics, cm_path, roc_path, json_path
 
 
-def run_dvc_stage(features_path: Path, models_dir: Path, results_dir: Path) -> None:
+def run_dvc_stage(features_path: Path, models_dir: Path, results_dir: Path, params: dict = None) -> None:
+    params = params or {}
     # ── Load features ─────────────────────────────────────────────────────────
     print(f"Loading features from {features_path}")
     with open(features_path, "rb") as f:
@@ -144,6 +146,25 @@ def run_dvc_stage(features_path: Path, models_dir: Path, results_dir: Path) -> N
         json.dump({k: float(v) for k, v in metrics.items()}, f, indent=2)
     print(f"Metrics JSON saved -> {json_path}")
 
+    # ── MLflow tracking ───────────────────────────────────────────────────────
+    mlflow_cfg = params.get("mlflow", {})
+    tracker = MlflowTracker(
+        experiment_name = mlflow_cfg.get("experiment_name", "SMS-Spam-Detection"),
+        tracking_uri    = mlflow_cfg.get("tracking_uri", "mlruns"),
+        model_type      = "SVM",
+    )
+    with tracker:
+        tracker.log_params({k: v for k, v in params.items() if k != "mlflow"})
+        tracker.log_metrics(metrics)
+        tracker.log_artifacts(cm_path, roc_path, json_path)
+        tracker.log_model(
+            detector   = detector,
+            tfidf      = joblib.load(str(models_dir / "tfidf_vectorizer.pkl")),
+            models_dir = models_dir,
+            register   = mlflow_cfg.get("register_model", False),
+            model_name = mlflow_cfg.get("model_name", "SmsSpamDetector"),
+        )
+
     # ── Print summary ─────────────────────────────────────────────────────────
     print(f"\n{'Metric':<15}  {'Value':>10}")
     print("-" * 28)
@@ -163,5 +184,6 @@ if __name__ == "__main__":
         features_path = ROOT / params["data"]["features_path"],
         models_dir    = ROOT / params["paths"]["models_dir"],
         results_dir   = ROOT / params["paths"]["results_dir"],
+        params        = params,
     )
     print("\n[stage_evaluate] DONE  Evaluation complete")

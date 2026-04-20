@@ -26,5 +26,8 @@ pytest>=7.4
 dvc>=3.0
 pyyaml>=6.0
 
+# MLflow — Experiment Tracking
+mlflow>=2.10
+
 # Optional: dataset download
 # kaggle>=1.6

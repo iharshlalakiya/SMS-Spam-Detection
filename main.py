@@ -25,6 +25,7 @@ import json
 import time
 import argparse
 import warnings
+import yaml
 from pathlib import Path
 
 warnings.filterwarnings("ignore")
@@ -64,6 +65,7 @@ from sms_spam.evaluation.metrics import (
 )
 from sms_spam.models.svm import SpamDetector
 from sms_spam.features.extraction import TFIDFExtractor
+from sms_spam.mlflow import MlflowTracker
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -192,6 +194,15 @@ def parse_args():
     return p.parse_args()
 
 
+def _load_params(root: Path) -> dict:
+    """Load params.yaml from the project root."""
+    params_path = root / "params.yaml"
+    if params_path.exists():
+        with open(params_path) as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
 def main():
     args = parse_args()
     data_path   = Path(args.data_path)
@@ -201,104 +212,146 @@ def main():
     total_steps = 6
     pipeline_start = time.time()
 
+    # ── Load params.yaml for MLflow ───────────────────────────────────────────
+    params = _load_params(ROOT)
+    mlflow_cfg = params.get("mlflow", {})
+    tracker = MlflowTracker(
+        experiment_name = mlflow_cfg.get("experiment_name", "SMS-Spam-Detection"),
+        tracking_uri    = mlflow_cfg.get("tracking_uri",    "mlruns"),
+        model_type      = "SVM",
+    )
+
     print("\n╔══════════════════════════════════════════════════════════════════════╗")
     print("║          SMS SPAM DETECTION — Full Pipeline                         ║")
     print("╚══════════════════════════════════════════════════════════════════════╝")
 
-    # ── Step 1: Download ──────────────────────────────────────────────────────
-    banner(1, total_steps, "Dataset")
-    log.info("Step 1 — Checking dataset at %s", data_path)
-    if not step_download(data_path, args.skip_download):
-        log.error("Dataset not available. Aborting.")
-        sys.exit(1)
+    tracker.start()
+    # Log all pipeline params up-front (excluding the mlflow section itself)
+    log_params = {k: v for k, v in params.items() if k != "mlflow"}
+    tracker.log_params(log_params)
+    # Capture exact pip environment for reproducibility
+    tracker.log_environment()
 
-    # ── Step 2: Preprocess  [sms_spam/train.py → step_preprocess()] ──────────
-    banner(2, total_steps, "Load & Preprocess")
-    trace("step_preprocess")
-    log.info("Step 2 — Loading and preprocessing data")
     try:
-        df = step_preprocess(data_path)
-        ok(f"Loaded {len(df)} messages  │  spam={df['label'].sum()}  ham={(df['label']==0).sum()}")
-        log.info("Loaded %d messages  (spam=%d, ham=%d)", len(df), df['label'].sum(), (df['label']==0).sum())
-    except Exception as exc:
-        err(f"Preprocessing failed: {exc}")
-        log.exception("Preprocessing failed")
-        import traceback; traceback.print_exc(); sys.exit(1)
+        # ── Step 1: Download ──────────────────────────────────────────────────────
+        banner(1, total_steps, "Dataset")
+        log.info("Step 1 — Checking dataset at %s", data_path)
+        if not step_download(data_path, args.skip_download):
+            log.error("Dataset not available. Aborting.")
+            sys.exit(1)
 
-    # ── Step 3: Split  [sms_spam/train.py → step_split()] ────────────────────
-    banner(3, total_steps, "Train / Test Split  (80 / 20)")
-    trace("step_split")
-    log.info("Step 3 — Splitting dataset (80/20 stratified)")
-    X_train, X_test, y_train, y_test = step_split(df)
-    ok(f"Train: {len(X_train)}  │  Test: {len(X_test)}")
-    log.info("Split complete — train=%d  test=%d", len(X_train), len(X_test))
+        # ── Step 2: Preprocess  [sms_spam/train.py → step_preprocess()] ──────────
+        banner(2, total_steps, "Load & Preprocess")
+        trace("step_preprocess")
+        log.info("Step 2 — Loading and preprocessing data")
+        try:
+            df = step_preprocess(data_path)
+            ok(f"Loaded {len(df)} messages  │  spam={df['label'].sum()}  ham={(df['label']==0).sum()}")
+            log.info("Loaded %d messages  (spam=%d, ham=%d)", len(df), df['label'].sum(), (df['label']==0).sum())
+        except Exception as exc:
+            err(f"Preprocessing failed: {exc}")
+            log.exception("Preprocessing failed")
+            import traceback; traceback.print_exc(); sys.exit(1)
 
-    # ── Step 4: Features  [sms_spam/train.py → step_features()] ──────────────
-    banner(4, total_steps, "TF-IDF Feature Extraction")
-    trace("step_features")
-    log.info("Step 4 — Extracting TF-IDF features")
-    try:
-        tfidf, X_train_tfidf, X_test_tfidf = step_features(X_train, X_test)
-        ok(f"Feature dimensions: {X_train_tfidf.shape[1]}")
-        log.info("TF-IDF feature dimensions: %d", X_train_tfidf.shape[1])
-    except Exception as exc:
-        err(f"Feature extraction failed: {exc}")
-        log.exception("Feature extraction failed")
-        import traceback; traceback.print_exc(); sys.exit(1)
+        # ── Step 3: Split  [sms_spam/train.py → step_split()] ────────────────────
+        banner(3, total_steps, "Train / Test Split  (80 / 20)")
+        trace("step_split")
+        log.info("Step 3 — Splitting dataset (80/20 stratified)")
+        X_train, X_test, y_train, y_test = step_split(df)
+        ok(f"Train: {len(X_train)}  │  Test: {len(X_test)}")
+        log.info("Split complete — train=%d  test=%d", len(X_train), len(X_test))
 
-    # ── Step 5: Train  [sms_spam/train.py → step_train()] ────────────────────
-    banner(5, total_steps, "Train SVM Classifier")
-    trace("step_train")
-    log.info("Step 5 — Training SVM classifier")
-    try:
-        detector = step_train(X_train_tfidf, y_train)
-        diag = detector.get_training_diagnostics()
-        if diag:
-            for k, v in diag.items():
-                info(f"{k.replace('_', ' ').title()}: {v}")
-                log.debug("Diagnostics — %s: %s", k, v)
-        ok(f"Training complete in {detector.training_time:.2f}s")
-        log.info("Training complete in %.2fs", detector.training_time)
-    except Exception as exc:
-        err(f"Training failed: {exc}")
-        log.exception("Training failed")
-        import traceback; traceback.print_exc(); sys.exit(1)
+        # ── Step 4: Features  [sms_spam/train.py → step_features()] ──────────────
+        banner(4, total_steps, "TF-IDF Feature Extraction")
+        trace("step_features")
+        log.info("Step 4 — Extracting TF-IDF features")
+        try:
+            tfidf, X_train_tfidf, X_test_tfidf = step_features(X_train, X_test)
+            ok(f"Feature dimensions: {X_train_tfidf.shape[1]}")
+            log.info("TF-IDF feature dimensions: %d", X_train_tfidf.shape[1])
+        except Exception as exc:
+            err(f"Feature extraction failed: {exc}")
+            log.exception("Feature extraction failed")
+            import traceback; traceback.print_exc(); sys.exit(1)
 
-    # ── Step 6: Evaluate  [sms_spam/evaluation/evaluate.py → step_evaluate()] ──
-    banner(6, total_steps, "Evaluate & Save Results")
-    trace("step_evaluate")
-    log.info("Step 6 — Evaluating model")
-    try:
-        metrics, cm_path, roc_path, json_path = step_evaluate(
-            detector, tfidf, X_test_tfidf, y_test, models_dir, results_dir
-        )
-        print()
-        print(f"   {'Metric':<15} {'Value':>10}")
-        print(f"   {'-'*27}")
-        for key in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]:
-            if key in metrics:
-                label = key.replace("_", " ").title()
-                print(f"   {label:<15} {metrics[key]:>10.4f}  ({metrics[key]*100:.2f}%)")
-                log.info("%-15s %.4f", label, metrics[key])
-        print()
-        ok(f"Confusion matrix → {cm_path}")
-        ok(f"ROC curve        → {roc_path}")
-        ok(f"Metrics JSON     → {json_path}")
-        ok(f"Model saved      → {models_dir / 'svm.pkl'}")
-        ok(f"Vectorizer saved → {models_dir / 'tfidf_vectorizer.pkl'}")
-        log.info("Artefacts saved — model: %s | vectorizer: %s | metrics: %s",
-                 models_dir / 'svm.pkl', models_dir / 'tfidf_vectorizer.pkl', json_path)
+        # ── Step 5: Train  [sms_spam/train.py → step_train()] ────────────────────
+        banner(5, total_steps, "Train SVM Classifier")
+        trace("step_train")
+        log.info("Step 5 — Training SVM classifier")
+        try:
+            detector = step_train(X_train_tfidf, y_train)
+            diag = detector.get_training_diagnostics()
+            if diag:
+                for k, v in diag.items():
+                    info(f"{k.replace('_', ' ').title()}: {v}")
+                    log.debug("Diagnostics — %s: %s", k, v)
+            ok(f"Training complete in {detector.training_time:.2f}s")
+            log.info("Training complete in %.2fs", detector.training_time)
+            tracker.log_training_info(detector)
+        except Exception as exc:
+            err(f"Training failed: {exc}")
+            log.exception("Training failed")
+            import traceback; traceback.print_exc(); sys.exit(1)
+
+        # ── Step 6: Evaluate  [sms_spam/evaluation/evaluate.py → step_evaluate()] ──
+        banner(6, total_steps, "Evaluate & Save Results")
+        trace("step_evaluate")
+        log.info("Step 6 — Evaluating model")
+        try:
+            metrics, cm_path, roc_path, json_path = step_evaluate(
+                detector, tfidf, X_test_tfidf, y_test, models_dir, results_dir
+            )
+            print()
+            print(f"   {'Metric':<15} {'Value':>10}")
+            print(f"   {'-'*27}")
+            for key in ["accuracy", "precision", "recall", "f1_score", "roc_auc"]:
+                if key in metrics:
+                    label = key.replace("_", " ").title()
+                    print(f"   {label:<15} {metrics[key]:>10.4f}  ({metrics[key]*100:.2f}%)")
+                    log.info("%-15s %.4f", label, metrics[key])
+            print()
+            ok(f"Confusion matrix → {cm_path}")
+            ok(f"ROC curve        → {roc_path}")
+            ok(f"Metrics JSON     → {json_path}")
+            ok(f"Model saved      → {models_dir / 'svm.pkl'}")
+            ok(f"Vectorizer saved → {models_dir / 'tfidf_vectorizer.pkl'}")
+            log.info("Artefacts saved — model: %s | vectorizer: %s | metrics: %s",
+                     models_dir / 'svm.pkl', models_dir / 'tfidf_vectorizer.pkl', json_path)
+
+            # ── MLflow: log everything ────────────────────────────────────────
+            tracker.log_metrics(metrics)
+            tracker.log_artifacts(cm_path, roc_path, json_path)
+            tracker.log_model(
+                detector   = detector,
+                tfidf      = tfidf,
+                models_dir = models_dir,
+                register   = mlflow_cfg.get("register_model", False),
+                model_name = mlflow_cfg.get("model_name", "SmsSpamDetector"),
+            )
+        except Exception as exc:
+            err(f"Evaluation failed: {exc}")
+            log.exception("Evaluation failed")
+            import traceback; traceback.print_exc(); sys.exit(1)
+
+    except SystemExit:
+        tracker.end()
+        raise
     except Exception as exc:
-        err(f"Evaluation failed: {exc}")
-        log.exception("Evaluation failed")
-        import traceback; traceback.print_exc(); sys.exit(1)
+        err(f"Unexpected pipeline error: {exc}")
+        log.exception("Unexpected pipeline error")
+        tracker.end()
+        raise
 
     # ── Done ──────────────────────────────────────────────────────────────────
+    tracker.end()
     elapsed = time.time() - pipeline_start
     f1 = metrics.get("f1_score", 0)
 
     log.info("Pipeline complete in %.1fs — F1=%.4f  Accuracy=%.4f",
              elapsed, f1, metrics['accuracy'])
+
+    if tracker.run_id:
+        print(f"   🔗 View in MLflow UI: run `mlflow ui` then open http://localhost:5000")
 
     print(f"\n╔══════════════════════════════════════════════════════════════════════╗")
     print(f"║  ✅  Pipeline complete in {elapsed:>6.1f}s                              ║")
@@ -308,3 +361,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

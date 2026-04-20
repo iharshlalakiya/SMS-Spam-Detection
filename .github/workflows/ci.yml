@@ -82,8 +82,8 @@ jobs:
           echo "→ Installing/updating Python dependencies..."
           .venv/bin/pip install -r requirements.txt --quiet
 
-          echo "→ Pulling latest DVC artifacts (models & data)..."
-          .venv/bin/dvc pull --force
+          echo "→ Reproducing pipeline on VM (train & evaluate)..."
+          .venv/bin/dvc repro
 
           echo "→ Restarting Streamlit service..."
           sudo systemctl restart streamlit

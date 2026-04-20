@@ -83,6 +83,7 @@ jobs:
           .venv/bin/pip install -r requirements.txt --quiet
 
           echo "→ Reproducing pipeline on VM (train & evaluate)..."
+          export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
           .venv/bin/dvc repro
 
           echo "→ Restarting Streamlit service..."

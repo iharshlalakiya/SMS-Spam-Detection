@@ -6,7 +6,7 @@ After=network.target
 Type=simple
 User=azureuser
 WorkingDirectory=/home/azureuser/SMS-Spam-Detection
-ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/mlflow ui --host 0.0.0.0 --port 5000
+ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/mlflow ui --host 0.0.0.0 --port 5000 --gunicorn-opts "--timeout 120 --forwarded-allow-ips='*'"
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log

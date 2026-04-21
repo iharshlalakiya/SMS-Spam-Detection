@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SMS Spam — ML Monitor</title>
+<style>
+  :root {
+    --bg:#0f1117; --card:#1a1d27; --border:#2a2d3e; --accent:#6c63ff;
+    --green:#22c55e; --red:#ef4444; --yellow:#f59e0b; --blue:#3b82f6;
+    --text:#e2e8f0; --muted:#64748b; --font:'Segoe UI',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px;min-height:100vh}
+  header{background:var(--card);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10}
+  header h1{font-size:18px;font-weight:700;letter-spacing:.5px}
+  header h1 span{color:var(--accent)}
+  #status-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;transition:background .3s}
+  #status-dot.live{background:var(--green);box-shadow:0 0 6px var(--green)}
+  #last-update{color:var(--muted);font-size:12px}
+  .grid{display:grid;gap:16px;padding:20px 24px}
+  .grid-4{grid-template-columns:repeat(4,1fr)}
+  .grid-3{grid-template-columns:repeat(3,1fr)}
+  .grid-2{grid-template-columns:repeat(2,1fr)}
+  @media(max-width:900px){.grid-4,.grid-3{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.grid-4,.grid-3,.grid-2{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px}
+  .card-title{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-bottom:10px}
+  .kpi{font-size:32px;font-weight:700;line-height:1}
+  .kpi-sub{font-size:12px;color:var(--muted);margin-top:4px}
+  .badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600}
+  .badge-green{background:#14532d;color:var(--green)}
+  .badge-red{background:#450a0a;color:var(--red)}
+  .badge-yellow{background:#451a03;color:var(--yellow)}
+  .badge-blue{background:#1e3a5f;color:var(--blue)}
+  section-title{display:block;font-size:13px;font-weight:600;color:var(--muted);padding:4px 24px 0;text-transform:uppercase;letter-spacing:.8px}
+  /* progress bar */
+  .bar-wrap{background:#2a2d3e;border-radius:4px;height:8px;overflow:hidden;margin-top:6px}
+  .bar-fill{height:100%;border-radius:4px;transition:width .6s ease}
+  /* log panel */
+  #log-panel{font-family:'Courier New',monospace;font-size:12px;background:#0a0c14;border:1px solid var(--border);border-radius:8px;height:260px;overflow-y:auto;padding:10px}
+  .log-line{padding:2px 0;border-bottom:1px solid #1a1d27;white-space:pre-wrap;word-break:break-all}
+  .log-INFO{color:#94a3b8}
+  .log-DEBUG{color:#6366f1}
+  .log-WARNING{color:var(--yellow)}
+  .log-ERROR{color:var(--red)}
+  /* metric row */
+  .metric-row{display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)}
+  .metric-row:last-child{border-bottom:none}
+  .metric-label{color:var(--muted)}
+  .metric-val{font-weight:600}
+  /* pipeline stages */
+  .stages{display:flex;gap:0;align-items:center;flex-wrap:wrap;margin-top:8px}
+  .stage{background:#1e2235;border:1px solid var(--border);border-radius:6px;padding:6px 12px;font-size:12px;position:relative}
+  .stage.ok{border-color:var(--green);color:var(--green)}
+  .stage.pending{border-color:var(--muted);color:var(--muted)}
+  .stage-arrow{color:var(--muted);padding:0 6px;font-size:16px}
+  /* drift gauge */
+  .gauge-wrap{position:relative;width:120px;height:60px;margin:0 auto}
+  canvas.gauge{display:block}
+  .gauge-val{position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:18px;font-weight:700}
+  /* confidence histogram */
+  #conf-chart{width:100%;height:80px}
+  /* tabs */
+  .tabs{display:flex;gap:4px;margin-bottom:12px}
+  .tab{padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;border:1px solid var(--border);color:var(--muted);background:transparent;transition:.2s}
+  .tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .tab-content{display:none}
+  .tab-content.active{display:block}
+  /* scrollbar */
+  ::-webkit-scrollbar{width:6px;height:6px}
+  ::-webkit-scrollbar-track{background:var(--bg)}
+  ::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+  /* page nav */
+  .page-nav{display:flex;gap:6px;padding:12px 24px;background:var(--card);border-bottom:1px solid var(--border)}
+  .page-nav button{padding:6px 18px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;font-weight:500;transition:.2s}
+  .page-nav button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .page{display:none}
+  .page.active{display:block}
+  /* mlflow table */
+  .ml-table{width:100%;border-collapse:collapse;font-size:12px}
+  .ml-table th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.6px;white-space:nowrap}
+  .ml-table td{padding:7px 10px;border-bottom:1px solid var(--border);vertical-align:middle}
+  .ml-table tr:hover td{background:#1e2235}
+  .run-id{font-family:monospace;font-size:11px;color:var(--muted)}
+  /* dvc stage card */
+  .dvc-stage{background:#1e2235;border:1px solid var(--border);border-radius:8px;padding:14px}
+  .dvc-stage h3{font-size:13px;font-weight:600;margin-bottom:8px;color:var(--accent)}
+  .dvc-dep{font-size:11px;color:var(--muted);padding:2px 0}
+  .dvc-out{font-size:11px;color:var(--green);padding:2px 0}
+  .kv-table{width:100%;border-collapse:collapse;font-size:12px}
+  .kv-table td{padding:5px 8px;border-bottom:1px solid var(--border)}
+  .kv-table td:first-child{color:var(--muted);width:50%}
+  .kv-table td:last-child{font-weight:600;word-break:break-all}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🛡️ SMS Spam <span>ML Monitor</span></h1>
+  <div style="display:flex;align-items:center;gap:16px">
+    <span><span id="status-dot"></span><span id="conn-label">Connecting…</span></span>
+    <span id="last-update" style="color:var(--muted)">—</span>
+  </div>
+</header>
+
+<nav class="page-nav">
+  <button class="active" onclick="showPage('monitor',this)">📊 Monitor</button>
+  <button onclick="showPage('mlflow',this)">🧪 MLflow Runs</button>
+  <button onclick="showPage('dvc',this)">🔁 DVC Pipeline</button>
+  <button onclick="showPage('feed',this)">📡 Live Feed</button>
+</nav>
+
+<div id="page-monitor" class="page active">
+<!-- KPI row -->
+<div class="grid grid-4" id="kpi-row">
+  <div class="card">
+    <div class="card-title">Accuracy</div>
+    <div class="kpi" id="kpi-acc">—</div>
+    <div class="kpi-sub">Model performance</div>
+  </div>
+  <div class="card">
+    <div class="card-title">F1 Score</div>
+    <div class="kpi" id="kpi-f1">—</div>
+    <div class="kpi-sub">Harmonic mean P/R</div>
+  </div>
+  <div class="card">
+    <div class="card-title">ROC-AUC</div>
+    <div class="kpi" id="kpi-auc">—</div>
+    <div class="kpi-sub">Discrimination ability</div>
+  </div>
+  <div class="card">
+    <div class="card-title">Pipeline Runs</div>
+    <div class="kpi" id="kpi-runs">—</div>
+    <div class="kpi-sub" id="kpi-runs-sub">Total executions</div>
+  </div>
+</div>
+
+<!-- Pipeline stages + data ingestion -->
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">Pipeline Stages</div>
+    <div class="stages" id="stages-row">
+      <div class="stage pending" id="st-download">download</div>
+      <div class="stage-arrow">→</div>
+      <div class="stage pending" id="st-preprocess">preprocess</div>
+      <div class="stage-arrow">→</div>
+      <div class="stage pending" id="st-featurize">featurize</div>
+      <div class="stage-arrow">→</div>
+      <div class="stage pending" id="st-train">train</div>
+      <div class="stage-arrow">→</div>
+      <div class="stage pending" id="st-evaluate">evaluate</div>
+    </div>
+    <div style="margin-top:14px">
+      <div class="metric-row">
+        <span class="metric-label">Last execution time</span>
+        <span class="metric-val" id="exec-time">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Last run at</span>
+        <span class="metric-val" id="last-run-at">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Model file age</span>
+        <span class="metric-val" id="model-age">—</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Data Ingestion</div>
+    <div class="metric-row">
+      <span class="metric-label">Downloads succeeded</span>
+      <span class="metric-val"><span class="badge badge-green" id="dl-ok">—</span></span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Download failures</span>
+      <span class="metric-val"><span class="badge badge-red" id="dl-fail">—</span></span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Total messages loaded</span>
+      <span class="metric-val" id="total-msgs">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Spam / Ham split</span>
+      <span class="metric-val" id="spam-ham-split">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Data freshness</span>
+      <span class="metric-val" id="data-fresh">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Missing / corrupted</span>
+      <span class="metric-val" id="missing-data"><span class="badge badge-green">None detected</span></span>
+    </div>
+  </div>
+</div>
+
+<!-- Model metrics detail + prediction stats -->
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">Model Metrics</div>
+    <div class="metric-row">
+      <span class="metric-label">Accuracy</span>
+      <span class="metric-val" id="m-acc">—</span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-acc" style="background:var(--green);width:0%"></div></div>
+    <div class="metric-row" style="margin-top:8px">
+      <span class="metric-label">Precision</span>
+      <span class="metric-val" id="m-prec">—</span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-prec" style="background:var(--blue);width:0%"></div></div>
+    <div class="metric-row" style="margin-top:8px">
+      <span class="metric-label">Recall</span>
+      <span class="metric-val" id="m-rec">—</span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-rec" style="background:var(--yellow);width:0%"></div></div>
+    <div class="metric-row" style="margin-top:8px">
+      <span class="metric-label">F1 Score</span>
+      <span class="metric-val" id="m-f1">—</span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-f1" style="background:var(--accent);width:0%"></div></div>
+    <div class="metric-row" style="margin-top:8px">
+      <span class="metric-label">ROC-AUC</span>
+      <span class="metric-val" id="m-auc">—</span>
+    </div>
+    <div class="bar-wrap"><div class="bar-fill" id="bar-auc" style="background:#ec4899;width:0%"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Prediction Stats</div>
+    <div class="metric-row">
+      <span class="metric-label">Total predictions</span>
+      <span class="metric-val" id="total-preds">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Spam predictions</span>
+      <span class="metric-val" id="spam-preds">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Ham predictions</span>
+      <span class="metric-val" id="ham-preds">—</span>
+    </div>
+    <div class="metric-row">
+      <span class="metric-label">Avg confidence</span>
+      <span class="metric-val" id="avg-conf">—</span>
+    </div>
+    <div class="card-title" style="margin-top:14px">Confidence Distribution</div>
+    <canvas id="conf-chart" height="80"></canvas>
+  </div>
+</div>
+
+<!-- Drift monitoring -->
+<div class="grid grid-2">
+  <div class="card">
+    <div class="card-title">Data Drift — Spam Ratio</div>
+    <div style="display:flex;gap:24px;align-items:center;margin-top:8px">
+      <div>
+        <div class="metric-row">
+          <span class="metric-label">Baseline (training)</span>
+          <span class="metric-val" id="drift-baseline">13.4%</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Recent predictions</span>
+          <span class="metric-val" id="drift-recent">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Drift score</span>
+          <span class="metric-val" id="drift-score">—</span>
+        </div>
+        <div class="metric-row">
+          <span class="metric-label">Status</span>
+          <span class="metric-val" id="drift-status">—</span>
+        </div>
+      </div>
+      <div style="flex:1">
+        <canvas id="drift-chart" height="90"></canvas>
+      </div>
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--muted)">
+      Drift = |recent spam ratio − training spam ratio|. &gt;0.15 = alert.
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Concept Drift Proxy — Confidence Trend</div>
+    <canvas id="trend-chart" height="100"></canvas>
+    <div style="margin-top:8px;font-size:11px;color:var(--muted)">
+      Falling average confidence over recent predictions may indicate concept drift.
+    </div>
+  </div>
+</div>
+
+<!-- Logs -->
+<div class="grid" style="grid-template-columns:1fr;padding-bottom:24px">
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div class="card-title" style="margin:0">Logs</div>
+      <div class="tabs">
+        <button class="tab active" onclick="switchTab('all')">All</button>
+        <button class="tab" onclick="switchTab('app')">Application</button>
+        <button class="tab" onclick="switchTab('error')">Errors <span id="err-badge" class="badge badge-red" style="display:none"></span></button>
+        <button class="tab" onclick="switchTab('warn')">Warnings <span id="warn-badge" class="badge badge-yellow" style="display:none"></span></button>
+        <button class="tab" onclick="switchTab('access')">Access</button>
+      </div>
+    </div>
+    <div id="log-panel"></div>
+  </div>
+</div>
+</div><!-- end #page-monitor -->
+
+<!-- ═══════════════ MLflow Page ═══════════════ -->
+<div id="page-mlflow" class="page">
+  <div class="grid" style="grid-template-columns:1fr;padding-bottom:24px">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <div class="card-title" style="margin:0">MLflow Experiment Runs</div>
+        <span id="mlflow-count" class="badge badge-blue">—</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="ml-table">
+          <thead>
+            <tr>
+              <th>Run Name</th>
+              <th>Status</th>
+              <th>Started</th>
+              <th>Duration</th>
+              <th>Accuracy</th>
+              <th>F1</th>
+              <th>ROC-AUC</th>
+              <th>Precision</th>
+              <th>Recall</th>
+              <th>Train Time</th>
+              <th>C</th>
+              <th>Kernel</th>
+              <th>Max Features</th>
+              <th>Run ID</th>
+            </tr>
+          </thead>
+          <tbody id="mlflow-tbody"><tr><td colspan="14" style="color:var(--muted);text-align:center;padding:20px">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ DVC Page ═══════════════ -->
+<!-- ═══════════════ Live Feed Page ═══════════════ -->
+<div id="page-feed" class="page">
+  <div class="grid grid-2" style="padding-bottom:8px">
+    <div class="card">
+      <div class="card-title">Data Feed Status</div>
+      <div class="metric-row">
+        <span class="metric-label">Total CSV rows</span>
+        <span class="metric-val" id="feed-rows">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Last append</span>
+        <span class="metric-val" id="feed-last" style="font-size:11px;word-break:break-all">—</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-label">Feed log present</span>
+        <span class="metric-val" id="feed-log-exists">—</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">How it works</div>
+      <div style="font-size:12px;color:var(--muted);line-height:1.7">
+        <b style="color:var(--text)">sms-data-feed</b> service runs <code>automation/data_feed.py</code> continuously.<br>
+        Every <b style="color:var(--text)">60 s</b> it appends new SMS messages to <code>data/raw/spam.csv</code>.<br>
+        When the file changes it triggers <code>python main.py --skip-download</code>.<br>
+        Metrics and logs update here in real time (5 s poll).<br><br>
+        To use a <b style="color:var(--accent)">real data source</b>, replace <code>fetch_new_messages()</code>
+        in <code>automation/data_feed.py</code> with your API / Kafka / DB call.
+      </div>
+    </div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr;padding-bottom:24px">
+    <div class="card">
+      <div class="card-title">Recent Feed Logs</div>
+      <div id="feed-log-panel" style="font-family:'Courier New',monospace;font-size:12px;background:#0a0c14;border:1px solid var(--border);border-radius:8px;height:320px;overflow-y:auto;padding:10px"></div>
+    </div>
+  </div>
+</div>
+
+<div id="page-dvc" class="page">
+  <div class="grid grid-2" style="padding-bottom:8px">
+    <div class="card">
+      <div class="card-title">Pipeline Stages</div>
+      <div id="dvc-stages" class="grid" style="grid-template-columns:1fr;gap:10px;padding:0;margin-top:4px">Loading…</div>
+    </div>
+    <div class="card">
+      <div class="card-title">Metrics (svm_results.json)</div>
+      <table class="kv-table" id="dvc-metrics-tbl"><tr><td colspan="2" style="color:var(--muted)">Loading…</td></tr></table>
+    </div>
+  </div>
+  <div class="grid" style="grid-template-columns:1fr;padding-bottom:24px">
+    <div class="card">
+      <div class="card-title">params.yaml</div>
+      <div id="dvc-params" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:4px"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = 'http://localhost:8765';
+let allLogs = [], activeTab = 'all';
+
+function showPage(name, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.page-nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='mlflow') fetchMLflow();
+  if(name==='dvc')    fetchDVC();
+  if(name==='feed')   fetchFeed();
+}
+
+// ── MLflow ──────────────────────────────────────────────────────────────────
+function statusBadge(s){
+  const map={FINISHED:'badge-green',FAILED:'badge-red',RUNNING:'badge-blue',KILLED:'badge-red'};
+  return `<span class="badge ${map[s]||'badge-yellow'}">${s}</span>`;
+}
+function fmtTime(ms){ if(!ms) return '—'; return new Date(ms).toLocaleString(); }
+function fmtDur(s){ if(s==null) return '—'; if(s<60) return s+'s'; return Math.floor(s/60)+'m '+Math.round(s%60)+'s'; }
+function fmtM(v){ return v!=null ? (v*100).toFixed(2)+'%' : '—'; }
+
+async function fetchMLflow(){
+  try{
+    const runs = await fetch(API+'/api/mlflow').then(r=>r.json());
+    document.getElementById('mlflow-count').textContent = runs.length+' runs';
+    const tbody = document.getElementById('mlflow-tbody');
+    if(!runs.length){ tbody.innerHTML='<tr><td colspan="14" style="color:var(--muted);text-align:center;padding:20px">No SVM runs found in mlruns/</td></tr>'; return; }
+    tbody.innerHTML = runs.map(r=>{
+      const m = r.metrics||{}, p = r.params||{};
+      const runName   = r.run_name || (r.run_id||'').slice(0,8);
+      const trainTime = m['training_time_s'] != null ? m['training_time_s']+'s' : '—';
+      return `<tr>
+        <td style="white-space:nowrap">${escHtml(runName)}</td>
+        <td>${statusBadge(r.status||'UNKNOWN')}</td>
+        <td style="white-space:nowrap;font-size:11px">${fmtTime(r.start_time)}</td>
+        <td>${fmtDur(r.duration_s)}</td>
+        <td>${fmtM(m.accuracy)}</td>
+        <td>${fmtM(m.f1_score||m.f1)}</td>
+        <td>${fmtM(m.roc_auc)}</td>
+        <td>${fmtM(m.precision)}</td>
+        <td>${fmtM(m.recall)}</td>
+        <td>${trainTime}</td>
+        <td>${p['svm.C']||'—'}</td>
+        <td>${p['svm.kernel']||'—'}</td>
+        <td>${p['tfidf.max_features']||'—'}</td>
+        <td class="run-id">${(r.run_id||'').slice(0,12)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e){ document.getElementById('mlflow-tbody').innerHTML='<tr><td colspan="14" style="color:var(--red);text-align:center;padding:20px">Failed to load — is monitor_server.py running?</td></tr>'; }
+}
+
+// ── DVC ──────────────────────────────────────────────────────────────────────
+async function fetchDVC(){
+  try{
+    const d = await fetch(API+'/api/dvc').then(r=>r.json());
+    // stages
+    const stagesEl = document.getElementById('dvc-stages');
+    const stages = d.stages||{};
+    if(!Object.keys(stages).length){ stagesEl.innerHTML='<span style="color:var(--muted)">No stages found in dvc.yaml</span>'; }
+    else {
+      stagesEl.innerHTML = Object.entries(stages).map(([name,s])=>{
+        // deps: prefer locked_deps (has real md5+size) else fall back to plain list
+        const depsHtml = (s.locked_deps||[]).length
+          ? s.locked_deps.map(d=>{
+              const sz = d.size ? ' <span style="color:var(--border)">'+Math.round(d.size/1024)+'KB</span>' : '';
+              const hash = d.md5 ? ' <span style="color:#334155">'+d.md5.slice(0,8)+'</span>' : '';
+              return `<div class="dvc-dep">↳ ${escHtml(d.path)}${hash}${sz}</div>`;
+            }).join('')
+          : (s.deps||[]).map(dep=>`<div class="dvc-dep">↳ ${escHtml(dep)}</div>`).join('');
+        // outs: prefer locked_outs
+        const outsHtml = (s.locked_outs||[]).length
+          ? s.locked_outs.map(o=>{
+              const sz = o.size ? ' <span style="color:var(--border)">'+Math.round(o.size/1024)+'KB</span>' : '';
+              const hash = o.md5 ? ' <span style="color:#334155">'+o.md5.slice(0,8)+'</span>' : '';
+              return `<div class="dvc-out">⇒ ${escHtml(o.path)}${hash}${sz}</div>`;
+            }).join('')
+          : (s.outs||[]).map(o=>`<div class="dvc-out">⇒ ${escHtml(o)}</div>`).join('');
+        return `<div class="dvc-stage">
+          <h3>▶ ${escHtml(name)}</h3>
+          <div style="font-size:11px;color:#94a3b8;margin-bottom:6px;word-break:break-all">${escHtml(s.cmd||'')}</div>
+          ${depsHtml}${outsHtml}
+        </div>`;
+      }).join('');
+    }
+    // metrics
+    const mTbl = document.getElementById('dvc-metrics-tbl');
+    const metrics = d.metrics||{};
+    mTbl.innerHTML = Object.keys(metrics).length
+      ? Object.entries(metrics).map(([k,v])=>`<tr><td>${escHtml(k)}</td><td>${typeof v==='number'?(v*100).toFixed(2)+'%':escHtml(String(v))}</td></tr>`).join('')
+      : '<tr><td colspan="2" style="color:var(--muted)">No metrics found</td></tr>';
+    // params
+    const paramsEl = document.getElementById('dvc-params');
+    const params = d.params||{};
+    paramsEl.innerHTML = Object.entries(params).map(([section,vals])=>{
+      const rows = typeof vals==='object' && vals!==null
+        ? Object.entries(vals).map(([k,v])=>`<tr><td>${escHtml(k)}</td><td>${escHtml(JSON.stringify(v))}</td></tr>`).join('')
+        : `<tr><td colspan="2">${escHtml(JSON.stringify(vals))}</td></tr>`;
+      return `<div><div class="card-title" style="margin-bottom:6px">${escHtml(section)}</div><table class="kv-table">${rows}</table></div>`;
+    }).join('');
+  } catch(e){ document.getElementById('dvc-stages').innerHTML='<span style="color:var(--red)">Failed to load — is monitor_server.py running?</span>'; }
+}
+
+function pct(v){ return (v*100).toFixed(1)+'%'; }
+function age(secs){
+  if(secs===null||secs===undefined) return '—';
+  if(secs<60) return secs+'s ago';
+  if(secs<3600) return Math.floor(secs/60)+'m ago';
+  if(secs<86400) return Math.floor(secs/3600)+'h ago';
+  return Math.floor(secs/86400)+'d ago';
+}
+
+function setBar(id, val){ document.getElementById(id).style.width = (val*100).toFixed(1)+'%'; }
+function setText(id, val){ const el=document.getElementById(id); if(el) el.textContent=val; }
+
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  event.target.closest('.tab').classList.add('active');
+  renderLogs();
+}
+
+function renderLogs(){
+  const panel = document.getElementById('log-panel');
+  let lines = allLogs;
+  if(activeTab==='error')   lines = allLogs.filter(l=>l.level==='ERROR');
+  if(activeTab==='warn')    lines = allLogs.filter(l=>l.level==='WARNING');
+  if(activeTab==='app')     lines = allLogs.filter(l=>l.raw.includes('sms_spam.app')||l.raw.includes('pipeline'));
+  if(activeTab==='access')  lines = allLogs.filter(l=>l.raw.includes('Prediction:'));
+  panel.innerHTML = lines.map(l=>`<div class="log-line log-${l.level}">${escHtml(l.raw)}</div>`).join('');
+  panel.scrollTop = panel.scrollHeight;
+}
+
+function escHtml(s){ return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+// Mini canvas bar chart
+function drawBars(canvasId, values, color='#6c63ff'){
+  const c = document.getElementById(canvasId);
+  if(!c) return;
+  const ctx = c.getContext('2d');
+  c.width = c.offsetWidth || 300;
+  const W=c.width, H=c.height, n=values.length;
+  ctx.clearRect(0,0,W,H);
+  if(!n) return;
+  const max = Math.max(...values,1);
+  const bw = Math.max(2, W/n - 2);
+  values.forEach((v,i)=>{
+    const bh = (v/max)*H;
+    ctx.fillStyle = color;
+    ctx.fillRect(i*(W/n), H-bh, bw, bh);
+  });
+}
+
+// Confidence histogram (buckets 0-10%, 10-20%, …, 90-100%)
+function confHistogram(confidences){
+  const buckets = new Array(10).fill(0);
+  confidences.forEach(c=>{ const b=Math.min(9,Math.floor(c/10)); buckets[b]++; });
+  drawBars('conf-chart', buckets, '#6c63ff');
+}
+
+// Drift bar chart
+function drawDriftChart(baseline, recent){
+  const c = document.getElementById('drift-chart');
+  if(!c) return;
+  const ctx = c.getContext('2d');
+  c.width = c.offsetWidth || 200;
+  const W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  const vals = [baseline, recent===null?0:recent];
+  const colors = ['#3b82f6','#f59e0b'];
+  const labels = ['Baseline','Recent'];
+  const bw = W/2 - 20;
+  vals.forEach((v,i)=>{
+    const bh = v * H * 4; // scale up for visibility
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(20 + i*(bw+20), H-Math.min(bh,H-20), bw, Math.min(bh,H-20));
+    ctx.fillStyle='#94a3b8';
+    ctx.font='10px sans-serif';
+    ctx.fillText(labels[i], 20+i*(bw+20), H-2);
+    ctx.fillText((v*100).toFixed(1)+'%', 20+i*(bw+20), H-Math.min(bh,H-20)-4);
+  });
+}
+
+// Confidence trend (rolling avg over last 20 preds)
+function drawTrend(confidences){
+  const c = document.getElementById('trend-chart');
+  if(!c||confidences.length<2) return;
+  const ctx = c.getContext('2d');
+  c.width = c.offsetWidth || 300;
+  const W=c.width, H=c.height;
+  ctx.clearRect(0,0,W,H);
+  // rolling avg window=5
+  const pts = [];
+  for(let i=0;i<confidences.length;i++){
+    const slice = confidences.slice(Math.max(0,i-4),i+1);
+    pts.push(slice.reduce((a,b)=>a+b,0)/slice.length);
+  }
+  const max=100, step=W/(pts.length-1);
+  ctx.strokeStyle='#6c63ff'; ctx.lineWidth=2;
+  ctx.beginPath();
+  pts.forEach((v,i)=>{ const x=i*step, y=H-(v/max)*H; i===0?ctx.moveTo(x,y):ctx.lineTo(x,y); });
+  ctx.stroke();
+  // fill
+  ctx.lineTo((pts.length-1)*step,H); ctx.lineTo(0,H); ctx.closePath();
+  ctx.fillStyle='rgba(108,99,255,0.15)'; ctx.fill();
+  // axis labels
+  ctx.fillStyle='#64748b'; ctx.font='10px sans-serif';
+  ctx.fillText('100%',2,12); ctx.fillText('0%',2,H-2);
+}
+
+function stageOk(id){ const el=document.getElementById(id); el.classList.remove('pending'); el.classList.add('ok'); }
+
+async function fetchAll(){
+  try{
+    const [mRes, sRes, lRes] = await Promise.all([
+      fetch(API+'/api/metrics'), fetch(API+'/api/stats'), fetch(API+'/api/logs')
+    ]);
+    const m = await mRes.json();
+    const s = await sRes.json();
+    const logs = await lRes.json();
+
+    // connection status
+    document.getElementById('status-dot').className='live';
+    document.getElementById('conn-label').textContent='Live';
+    document.getElementById('last-update').textContent='Updated '+new Date().toLocaleTimeString();
+
+    // KPIs
+    setText('kpi-acc', m.accuracy ? pct(m.accuracy) : '—');
+    setText('kpi-f1',  m.f1_score ? pct(m.f1_score) : '—');
+    setText('kpi-auc', m.roc_auc  ? pct(m.roc_auc)  : '—');
+    setText('kpi-runs', s.pipeline_runs ?? '—');
+    setText('kpi-runs-sub', s.last_run_time ? 'Last: '+s.last_run_time.slice(0,16) : 'Total executions');
+
+    // metric bars
+    ['acc','prec','rec','f1','auc'].forEach(k=>{
+      const map={acc:'accuracy',prec:'precision',rec:'recall',f1:'f1_score',auc:'roc_auc'};
+      const v = m[map[k]];
+      if(v!==undefined){ setText('m-'+k, pct(v)); setBar('bar-'+k, v); }
+    });
+
+    // pipeline stages — mark ok if last run succeeded
+    if(s.download_success>0) stageOk('st-download');
+    if(s.total_messages)     { stageOk('st-preprocess'); stageOk('st-featurize'); }
+    if(s.model_age_secs!==null) { stageOk('st-train'); stageOk('st-evaluate'); }
+
+    setText('exec-time', s.exec_time_secs ? s.exec_time_secs+'s' : '—');
+    setText('last-run-at', s.last_run_time ? s.last_run_time.slice(0,19) : '—');
+    setText('model-age', age(s.model_age_secs));
+
+    // data ingestion
+    setText('dl-ok',   s.download_success ?? 0);
+    setText('dl-fail', s.download_fail ?? 0);
+    setText('total-msgs', s.total_messages ? s.total_messages.toLocaleString() : '—');
+    setText('spam-ham-split', s.spam_count && s.ham_count ? `${s.spam_count} spam / ${s.ham_count} ham` : '—');
+    setText('data-fresh', age(s.data_freshness_secs));
+
+    // prediction stats
+    setText('total-preds', s.total_predictions ?? '—');
+    setText('spam-preds',  s.spam_predictions  ?? '—');
+    setText('ham-preds',   s.ham_predictions   ?? '—');
+    setText('avg-conf',    s.avg_confidence!=null ? s.avg_confidence+'%' : '—');
+
+    // confidence histogram
+    if(s.confidences && s.confidences.length) confHistogram(s.confidences);
+
+    // drift
+    setText('drift-baseline', s.baseline_spam_ratio!=null ? pct(s.baseline_spam_ratio) : '—');
+    setText('drift-recent',   s.recent_spam_ratio!=null   ? pct(s.recent_spam_ratio)   : '—');
+    setText('drift-score',    s.drift_score!=null         ? s.drift_score.toFixed(3)   : '—');
+    if(s.drift_score!=null){
+      const ok = s.drift_score < 0.15;
+      document.getElementById('drift-status').innerHTML =
+        ok ? '<span class="badge badge-green">Normal</span>'
+           : '<span class="badge badge-red">⚠ Drift Detected</span>';
+    }
+    drawDriftChart(s.baseline_spam_ratio||0.134, s.recent_spam_ratio);
+    if(s.confidences && s.confidences.length>1) drawTrend(s.confidences);
+
+    // error/warning badges
+    const errBadge=document.getElementById('err-badge');
+    const warnBadge=document.getElementById('warn-badge');
+    if(s.error_count>0){ errBadge.style.display='inline'; errBadge.textContent=s.error_count; }
+    if(s.warning_count>0){ warnBadge.style.display='inline'; warnBadge.textContent=s.warning_count; }
+
+    // logs
+    allLogs = logs;
+    renderLogs();
+
+  } catch(e){
+    document.getElementById('status-dot').className='';
+    document.getElementById('conn-label').textContent='Offline — start monitor_server.py';
+  }
+}
+
+// ── Live Feed ────────────────────────────────────────────────────────────────
+async function fetchFeed(){
+  try{
+    const d = await fetch(API+'/api/feed').then(r=>r.json());
+    setText('feed-rows', d.csv_rows != null ? d.csv_rows.toLocaleString() : '—');
+    setText('feed-last', d.last_append || '—');
+    document.getElementById('feed-log-exists').innerHTML =
+      d.feed_log_exists
+        ? '<span class="badge badge-green">Yes</span>'
+        : '<span class="badge badge-yellow">Not yet</span>';
+    const panel = document.getElementById('feed-log-panel');
+    if(d.recent_feed_logs && d.recent_feed_logs.length){
+      panel.innerHTML = d.recent_feed_logs.map(l=>{
+        const cls = l.includes('ERROR') ? 'log-ERROR' : l.includes('WARNING') ? 'log-WARNING' : 'log-INFO';
+        return `<div class="log-line ${cls}">${escHtml(l)}</div>`;
+      }).join('');
+      panel.scrollTop = panel.scrollHeight;
+    }
+  } catch(e){ /* server offline */ }
+}
+
+fetchAll();
+setInterval(fetchAll, 5000); // refresh every 5s
+setInterval(fetchFeed, 5000);
+</script>
+</body>
+</html>

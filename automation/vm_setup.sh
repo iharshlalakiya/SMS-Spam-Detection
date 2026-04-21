@@ -61,9 +61,17 @@ Environment=PYTHONUNBUFFERED=1
 WantedBy=multi-user.target
 EOF
 
+# 8. Register data-feed service
+echo "→ Registering sms-data-feed service..."
+sudo cp "$PROJECT_DIR/automation/sms-data-feed.service" /etc/systemd/system/sms-data-feed.service
+
+# 9. Register monitor dashboard service
+echo "→ Registering sms-monitor service..."
+sudo cp "$PROJECT_DIR/automation/sms-monitor.service" /etc/systemd/system/sms-monitor.service
+
 sudo systemctl daemon-reload
-sudo systemctl enable sms-watcher mlflow streamlit
-sudo systemctl start sms-watcher mlflow streamlit
+sudo systemctl enable sms-watcher mlflow streamlit sms-data-feed sms-monitor
+sudo systemctl start  sms-watcher mlflow streamlit sms-data-feed sms-monitor
 
 VM_IP=$(curl -s ifconfig.me)
 echo ""
@@ -71,12 +79,16 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "  ✅  Setup complete!"
 echo ""
 echo "  Services running:"
-echo "    sms-watcher  → auto-retrains when data/raw/*.csv changes"
-echo "    streamlit    → http://$VM_IP:8501"
-echo "    mlflow       → http://$VM_IP:5000"
+echo "    sms-watcher    → auto-retrains when data/raw/*.csv changes"
+echo "    sms-data-feed  → continuous data ingestion + pipeline trigger"
+echo "    sms-monitor    → real-time HTML dashboard"
+echo "    streamlit      → http://$VM_IP:8501"
+echo "    mlflow         → http://$VM_IP:5000"
+echo "    monitor        → http://$VM_IP:8765"
 echo ""
 echo "  Useful commands:"
-echo "    sudo systemctl status sms-watcher mlflow streamlit"
+echo "    sudo systemctl status sms-watcher sms-data-feed sms-monitor mlflow streamlit"
+echo "    tail -f $PROJECT_DIR/logs/data_feed.log"
+echo "    tail -f $PROJECT_DIR/logs/monitor.log"
 echo "    tail -f $PROJECT_DIR/logs/watcher.log"
-echo "    tail -f $PROJECT_DIR/logs/mlflow.log"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

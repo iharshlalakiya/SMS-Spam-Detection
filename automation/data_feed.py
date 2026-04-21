@@ -95,16 +95,16 @@ def csv_row_count() -> int:
 
 
 def append_to_csv(messages: list[tuple[str, str]]) -> int:
-    """Append messages to spam.csv, return count appended."""
+    """Append messages to spam.csv matching the original 5-column format (v1,v2,,,)."""
     RAW_CSV.parent.mkdir(parents=True, exist_ok=True)
     write_header = not RAW_CSV.exists()
     appended = 0
     with open(RAW_CSV, "a", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         if write_header:
-            writer.writerow(["v1", "v2"])
+            writer.writerow(["v1", "v2", "", "", ""])
         for label, text in messages:
-            writer.writerow([label, text])
+            writer.writerow([label, text, "", "", ""])
             appended += 1
     return appended
 

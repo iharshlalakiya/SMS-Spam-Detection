@@ -425,11 +425,3 @@ streamlit run app.py
 * The pipeline assumes the raw dataset is available at `data/raw/spam.csv`.
 * NLTK resources are downloaded automatically by the preprocessing module when needed.
 * The repo currently ships without a separate `monitoring/` folder, so MLflow is the main experiment-tracking surface.
-
----
-
-## Author
-
-Harsh Lalakiya
-
-GitHub: https://github.com/iharshlalakiya

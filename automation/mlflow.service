@@ -1,0 +1,17 @@
+[Unit]
+Description=SMS Spam Detection — MLflow UI (port 5000)
+After=network.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/SMS-Spam-Detection
+ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/mlflow ui --host 0.0.0.0 --port 5000
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
+StandardError=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

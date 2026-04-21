@@ -6,7 +6,8 @@
 set -e
 
 PROJECT_DIR="/home/azureuser/SMS-Spam-Detection"
-SERVICE_DST="/etc/systemd/system/sms-watcher.service"
+WATCHER_SERVICE="/etc/systemd/system/sms-watcher.service"
+MLFLOW_SERVICE="/etc/systemd/system/mlflow.service"
 
 echo "→ Pulling latest code (includes watcher files)..."
 cd "$PROJECT_DIR"
@@ -15,22 +16,31 @@ git reset --hard origin/main
 
 echo "→ Detecting Python path..."
 PYTHON=$(which python3 || which python)
-echo "   Using: $PYTHON"
+MLFLOW="$(dirname $PYTHON)/mlflow"
+echo "   Using Python: $PYTHON"
+echo "   Using MLflow: $MLFLOW"
 
-# Patch the service file with the correct python path on this VM
+# Patch watcher service file
+echo "→ Installing sms-watcher service..."
 sed "s|/home/azureuser/SMS-Spam-Detection/.venv/bin/python|$PYTHON|g" \
-    "$PROJECT_DIR/automation/sms-watcher.service" | sudo tee "$SERVICE_DST" > /dev/null
+    "$PROJECT_DIR/automation/sms-watcher.service" | sudo tee "$WATCHER_SERVICE" > /dev/null
 
-echo "→ Registering sms-watcher systemd service..."
+# Patch mlflow service file
+echo "→ Installing mlflow service..."
+sed "s|/home/azureuser/SMS-Spam-Detection/.venv/bin/mlflow|$MLFLOW|g" \
+    "$PROJECT_DIR/automation/mlflow.service" | sudo tee "$MLFLOW_SERVICE" > /dev/null
+
+echo "→ Registering services..."
 sudo systemctl daemon-reload
-sudo systemctl enable sms-watcher
-sudo systemctl restart sms-watcher
+sudo systemctl enable sms-watcher mlflow
+sudo systemctl restart sms-watcher mlflow
 
 echo ""
-echo "✅ Done! Watcher is running."
+echo "✅ Done! Services are running."
 echo ""
-echo "   Drop a new CSV into:  $PROJECT_DIR/data/raw/"
-echo "   Pipeline auto-runs within 30 seconds."
+echo "   sms-watcher → auto-retrains when data/raw/*.csv changes"
+echo "   mlflow      → UI at http://$(curl -s ifconfig.me):5000"
 echo ""
-echo "   Check status:  sudo systemctl status sms-watcher"
+echo "   Check status:  sudo systemctl status sms-watcher mlflow"
 echo "   Watch logs:    tail -f $PROJECT_DIR/logs/watcher.log"
+echo "                  tail -f $PROJECT_DIR/logs/mlflow.log"

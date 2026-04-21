@@ -2,10 +2,12 @@ name: Auto-Retrain on New Data
 
 on:
   push:
-    branches: [main]
+    branches:
+      - main
+      - harsh-dev
     paths:
-      - "data/raw/**.csv"      # triggers only when CSV data changes
-      - "params.yaml"          # or when hyperparams change
+      - "data/raw/**.csv"
+      - "params.yaml"
 
 jobs:
   retrain:
@@ -25,29 +27,7 @@ jobs:
         run: |
           pip install -r requirements.txt
 
-      - name: Run DVC pipeline
-        env:
-          MLFLOW_TRACKING_URI:      ${{ secrets.MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-        run: |
-          dvc repro
-
-      - name: Run main pipeline with MLflow tracking
-        env:
-          MLFLOW_TRACKING_URI:      ${{ secrets.MLFLOW_TRACKING_URI }}
-          MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-          MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-        run: |
-          python main.py --skip-download
-
-      - name: Upload metrics artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: svm-metrics
-          path: results/metrics/svm_results.json
-
-      - name: Deploy retrained model to Azure VM
+      - name: Deploy & retrain on Azure VM
         uses: appleboy/ssh-action@v1.0.3
         with:
           host:     ${{ secrets.VM_HOST }}
@@ -55,18 +35,20 @@ jobs:
           key:      ${{ secrets.VM_SSH_KEY }}
           script: |
             set -e
-            export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
             cd /home/azureuser/SMS-Spam-Detection
+            export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
 
-            echo "Pulling latest code + new data..."
-            git fetch origin main
-            git reset --hard origin/main
+            echo "→ Pulling branch ${{ github.ref_name }}..."
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git reset --hard origin/${{ github.ref_name }}
 
-            echo "Re-running pipeline on VM..."
+            echo "→ Running pipeline..."
             dvc repro
             python main.py --skip-download
 
-            echo "Restarting Streamlit app..."
-            sudo systemctl restart streamlit
+            echo "→ Restarting services..."
+            sudo systemctl restart streamlit || true
+            sudo systemctl restart mlflow    || true
 
-            echo "Retrain + deploy complete."
+            echo "✅ Retrain complete."

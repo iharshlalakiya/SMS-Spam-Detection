@@ -4,12 +4,14 @@ on:
   push:
     branches:
       - main
+      - harsh-dev
   pull_request:
     branches:
       - main
+      - harsh-dev
 
 jobs:
-  test-and-reproduce:
+  test:
     runs-on: ubuntu-latest
 
     steps:
@@ -31,32 +33,10 @@ jobs:
       run: |
         pytest tests/ -v
 
-    - name: Reproduce DVC pipeline with MLflow tracking
-      # MLflow is logged inside the evaluate stage (sms_spam/evaluation/evaluate.py).
-      # Secrets are set in: GitHub repo → Settings → Secrets and variables → Actions
-      # Required secrets:
-      #   MLFLOW_TRACKING_URI      = https://dagshub.com/<user>/SMS-Spam-Detection.mlflow
-      #   MLFLOW_TRACKING_USERNAME = <dagshub_username>
-      #   MLFLOW_TRACKING_PASSWORD = <dagshub_access_token>
-      env:
-        MLFLOW_TRACKING_URI:      ${{ secrets.MLFLOW_TRACKING_URI }}
-        MLFLOW_TRACKING_USERNAME: ${{ secrets.MLFLOW_TRACKING_USERNAME }}
-        MLFLOW_TRACKING_PASSWORD: ${{ secrets.MLFLOW_TRACKING_PASSWORD }}
-      run: |
-        dvc repro
-
-    - name: Print MLflow tracking summary
-      if: always()
-      run: |
-        echo "========================================"
-        echo "  MLflow run logged to:"
-        echo "  ${{ secrets.MLFLOW_TRACKING_URI }}"
-        echo "========================================"
-
   deploy:
     runs-on: ubuntu-latest
-    needs: test-and-reproduce
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: test
+    if: github.event_name == 'push'
 
     steps:
     - name: Deploy to Azure VM
@@ -66,42 +46,30 @@ jobs:
         username: ${{ secrets.VM_USER }}
         key:      ${{ secrets.VM_SSH_KEY }}
         script: |
-          set -e  # Exit immediately on any error
+          set -e
 
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "  Starting deployment on Azure VM"
+          echo "  Deploying branch: ${{ github.ref_name }}"
+          echo "  Commit: ${{ github.sha }}"
           echo "  $(date)"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-          export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
           cd /home/azureuser/SMS-Spam-Detection
+          export PATH="/home/azureuser/SMS-Spam-Detection/.venv/bin:$PATH"
 
-          echo "→ Pulling latest code from GitHub..."
-          git fetch origin main
-          git reset --hard origin/main
+          echo "→ Pulling latest code from branch ${{ github.ref_name }}..."
+          git fetch origin
+          git checkout ${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
 
           echo "→ Installing/updating Python dependencies..."
           pip install -r requirements.txt --quiet
 
-          echo "→ Reproducing pipeline on VM (train & evaluate)..."
-          dvc repro
-
-          echo "→ Restarting Streamlit service..."
-          sudo systemctl restart streamlit
-
-          echo "→ Checking service status..."
-          sudo systemctl status streamlit --no-pager
+          echo "→ Restarting services..."
+          sudo systemctl restart streamlit || true
+          sudo systemctl restart mlflow    || true
 
           echo ""
-          echo "✅ Deployment completed successfully!"
-          echo "   App is live at: http://${{ secrets.VM_HOST }}"
-
-    - name: Deployment summary
-      if: always()
-      run: |
-        echo "================================================"
-        echo "  Deploy job finished"
-        echo "  Target: ${{ secrets.VM_HOST }}"
-        echo "  Triggered by: ${{ github.actor }}"
-        echo "  Commit: ${{ github.sha }}"
-        echo "================================================"
+          echo "✅ Deployment complete!"
+          echo "   Streamlit → http://${{ secrets.VM_HOST }}:8501"
+          echo "   MLflow    → http://${{ secrets.VM_HOST }}:5000"

@@ -33,17 +33,17 @@ pip install -r "$PROJECT_DIR/requirements.txt" --quiet
 echo "→ Verifying DVC..."
 dvc --version
 
-# 5. Register watcher as systemd service
-echo "→ Registering watcher service..."
+# 5. Register sms-watcher service
+echo "→ Registering sms-watcher service..."
 sudo cp "$SERVICE_SRC" "$SERVICE_DST"
-sudo systemctl daemon-reload
-sudo systemctl enable sms-watcher
-sudo systemctl start sms-watcher
 
-# 6. Register Streamlit as systemd service (if not already)
-if ! systemctl is-active --quiet streamlit; then
-  echo "→ Creating Streamlit service..."
-  sudo tee /etc/systemd/system/streamlit.service > /dev/null <<EOF
+# 6. Register MLflow UI service
+echo "→ Registering MLflow UI service..."
+sudo cp "$PROJECT_DIR/automation/mlflow.service" /etc/systemd/system/mlflow.service
+
+# 7. Register Streamlit service
+echo "→ Registering Streamlit service..."
+sudo tee /etc/systemd/system/streamlit.service > /dev/null <<EOF
 [Unit]
 Description=SMS Spam Detection Streamlit App
 After=network.target
@@ -60,21 +60,23 @@ Environment=PYTHONUNBUFFERED=1
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo systemctl daemon-reload
-  sudo systemctl enable streamlit
-  sudo systemctl start streamlit
-fi
 
+sudo systemctl daemon-reload
+sudo systemctl enable sms-watcher mlflow streamlit
+sudo systemctl start sms-watcher mlflow streamlit
+
+VM_IP=$(curl -s ifconfig.me)
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅  Setup complete!"
 echo ""
 echo "  Services running:"
 echo "    sms-watcher  → auto-retrains when data/raw/*.csv changes"
-echo "    streamlit    → app live at http://$(curl -s ifconfig.me):8501"
+echo "    streamlit    → http://$VM_IP:8501"
+echo "    mlflow       → http://$VM_IP:5000"
 echo ""
 echo "  Useful commands:"
-echo "    sudo systemctl status sms-watcher"
-echo "    sudo systemctl status streamlit"
+echo "    sudo systemctl status sms-watcher mlflow streamlit"
 echo "    tail -f $PROJECT_DIR/logs/watcher.log"
+echo "    tail -f $PROJECT_DIR/logs/mlflow.log"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

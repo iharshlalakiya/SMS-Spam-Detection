@@ -1,0 +1,17 @@
+[Unit]
+Description=SMS Spam Detection — Data Watcher (auto-retrain on new data)
+After=network.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/SMS-Spam-Detection
+ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/python automation/watcher.py
+Restart=always
+RestartSec=10
+StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/watcher.log
+StandardError=append:/home/azureuser/SMS-Spam-Detection/logs/watcher.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

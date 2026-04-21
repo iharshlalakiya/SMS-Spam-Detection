@@ -190,6 +190,109 @@ class ModelRegistryManager:
         prod = self._get_latest_version(model_name, stage="Production")
         return prod.version if prod else None
 
+    def get_production_metrics(self, model_name: str) -> dict:
+        """Return metrics dict of the current Production model run, or {}."""
+        prod = self._get_latest_version(model_name, stage="Production")
+        if prod is None or not prod.run_id:
+            return {}
+        try:
+            run = self._client.get_run(prod.run_id)
+            return run.data.metrics
+        except Exception as exc:
+            log.warning("Could not fetch production metrics: %s", exc)
+            return {}
+
+    def compare_and_promote(
+        self,
+        model_name: str,
+        new_run_id: str,
+        metric: str = "f1_score",
+    ) -> bool:
+        """
+        Compare new run against current Production model on a given metric.
+        Promotes new model to Production and copies artifacts to models/
+        only if it's better.
+
+        Returns True if promoted, False if not.
+        """
+        try:
+            new_run    = self._client.get_run(new_run_id)
+            new_metric = new_run.data.metrics.get(metric) or new_run.data.metrics.get("f1")
+            if new_metric is None:
+                log.warning("Metric '%s' not found in new run. Skipping comparison.", metric)
+                return False
+
+            prod_metrics = self.get_production_metrics(model_name)
+            prod_metric  = prod_metrics.get(metric) or prod_metrics.get("f1")
+
+            print(f"\n   {'─'*50}")
+            print(f"   Model Comparison  ({metric})")
+            print(f"   {'─'*50}")
+            print(f"   New model        : {new_metric:.4f}")
+            print(f"   Production model : {prod_metric:.4f}" if prod_metric else "   Production model : None (first run)")
+
+            if prod_metric is None or new_metric > prod_metric:
+                # Register new version and promote to Production
+                versions = self._client.search_model_versions(f"name='{model_name}' and run_id='{new_run_id}'")
+                if not versions:
+                    log.warning("No registered version found for run_id %s", new_run_id)
+                    return False
+                new_version = versions[0].version
+                improvement = f"+{(new_metric - prod_metric):.4f}" if prod_metric else "first"
+                self.transition(
+                    model_name, int(new_version), "Production",
+                    description=f"Auto-promoted: {metric}={new_metric:.4f} ({improvement})",
+                )
+
+                # ── Copy winning model artifacts to models/ so app uses it ──
+                self._deploy_best_model(new_run_id)
+
+                print(f"   ✅ PROMOTED  → new model is better ({improvement})")
+                print(f"   🚀 Deployed  → models/svm.pkl updated")
+                print(f"   {'─'*50}\n")
+                log.info("Auto-promoted %s v%s to Production (%s: %.4f > %.4f)",
+                         model_name, new_version, metric, new_metric, prod_metric or 0)
+                return True
+            else:
+                diff = prod_metric - new_metric
+                print(f"   ⏭️  SKIPPED   → production model is better by {diff:.4f}")
+                print(f"   {'─'*50}\n")
+                log.info("New model NOT promoted (%s: %.4f <= %.4f)",
+                         metric, new_metric, prod_metric)
+                return False
+        except Exception as exc:
+            log.warning("compare_and_promote failed: %s", exc)
+            return False
+
+    def _deploy_best_model(self, run_id: str) -> None:
+        """
+        Copy svm.pkl and tfidf_vectorizer.pkl from the winning MLflow run
+        artifacts into models/ so the Streamlit app immediately uses the
+        best model.
+        """
+        import shutil
+        from pathlib import Path
+
+        try:
+            # Download artifacts from MLflow run to a local temp dir
+            local_dir = Path(mlflow.artifacts.download_artifacts(
+                run_id=run_id, artifact_path="model_artifacts"
+            ))
+            models_dir = Path("models")
+            models_dir.mkdir(exist_ok=True)
+
+            for fname in ["svm.pkl", "tfidf_vectorizer.pkl"]:
+                src = local_dir / fname
+                dst = models_dir / fname
+                if src.exists():
+                    shutil.copy2(src, dst)
+                    log.info("Deployed best model artifact: %s → %s", src, dst)
+                    print(f"   📦 Copied {fname} → models/")
+                else:
+                    log.warning("Artifact not found in run: %s", fname)
+        except Exception as exc:
+            log.warning("_deploy_best_model failed: %s", exc)
+
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _get_latest_version(self, model_name: str, stage: str):

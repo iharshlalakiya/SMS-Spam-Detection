@@ -1,0 +1,17 @@
+[Unit]
+Description=SMS Spam Detection — Monitor Dashboard (HTTP API + HTML on port 8765)
+After=network.target
+
+[Service]
+Type=simple
+User=azureuser
+WorkingDirectory=/home/azureuser/SMS-Spam-Detection
+ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/python monitor_server.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/monitor.log
+StandardError=append:/home/azureuser/SMS-Spam-Detection/logs/monitor.log
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,18 +1,17 @@
 [Unit]
-Description=SMS Spam Detection — MLflow Server (port 5000)
+Description=SMS Spam Detection — MLflow Server (port 5001, proxied via Nginx on 5000)
 After=network.target
 
 [Service]
 Type=simple
 User=azureuser
 WorkingDirectory=/home/azureuser/SMS-Spam-Detection
-ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/python3 -m mlflow server --host 0.0.0.0 --port 5000 --backend-store-uri /home/azureuser/SMS-Spam-Detection/mlruns --default-artifact-root /home/azureuser/SMS-Spam-Detection/mlruns
+ExecStart=/home/azureuser/SMS-Spam-Detection/.venv/bin/python3 -m mlflow server --host 127.0.0.1 --port 5001 --backend-store-uri /home/azureuser/SMS-Spam-Detection/mlruns --default-artifact-root /home/azureuser/SMS-Spam-Detection/mlruns
 Restart=always
 RestartSec=5
 StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
 StandardError=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
 Environment=PYTHONUNBUFFERED=1
-Environment=MLFLOW_DISABLE_ENV_MANAGER_VALIDATION=1
 
 [Install]
 WantedBy=multi-user.target

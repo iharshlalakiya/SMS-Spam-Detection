@@ -310,27 +310,14 @@ class MlflowTracker:
         register:   bool = False,
         model_name: str  = "SmsSpamDetector",
     ) -> None:
-        """
-        Log the trained sklearn model to MLflow and optionally register it.
-
-        Parameters
-        ----------
-        detector   : SpamDetector — trained SVM wrapper
-        tfidf      : TFIDFExtractor — fitted vectorizer
-        models_dir : Path — directory containing svm.pkl / tfidf_vectorizer.pkl
-        register   : bool — register in Model Registry if True
-        model_name : str  — registry model name
-        """
         if not _MLFLOW_AVAILABLE or not self._active:
             return
         try:
-            # Log raw pickle files as artifacts for DVC compatibility
             for fname in ["svm.pkl", "tfidf_vectorizer.pkl"]:
                 fpath = Path(models_dir) / fname
                 if fpath.exists():
                     mlflow.log_artifact(str(fpath), artifact_path="model_artifacts")
 
-            # Log as native sklearn model (enables `mlflow models serve`)
             registered_model_name = model_name if register else None
             mlflow.sklearn.log_model(
                 sk_model              = detector.model,
@@ -341,6 +328,20 @@ class MlflowTracker:
                      f" and registered as '{model_name}'" if register else "")
             if register:
                 print(f"   📊 Model registered  →  '{model_name}' in Model Registry")
+
+            # ── Auto-compare new model vs Production and promote if better ───────
+            if register and self._run:
+                try:
+                    from sms_spam.mlflow.mlflow_registry import ModelRegistryManager
+                    registry = ModelRegistryManager(tracking_uri=self.tracking_uri)
+                    registry.compare_and_promote(
+                        model_name = model_name,
+                        new_run_id = self._run.info.run_id,
+                        metric     = "f1_score",
+                    )
+                except Exception as exc:
+                    log.warning("Auto-promotion check failed: %s", exc)
+
         except Exception as exc:
             log.warning("MLflow log_model failed: %s", exc)
 

@@ -403,7 +403,8 @@
 </div>
 
 <script>
-const API = window.location.origin;
+const BASE = window.location.pathname.startsWith('/monitor') ? '/monitor' : '';
+const API = window.location.origin + BASE;
 let allLogs = [], activeTab = 'all';
 
 function showPage(name, btn){

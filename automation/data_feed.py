@@ -27,7 +27,7 @@ RAW_CSV   = ROOT / "data" / "raw" / "spam.csv"
 LOG_FILE  = ROOT / "logs" / "data_feed.log"
 
 # How often to check for / inject new data (seconds)
-FEED_INTERVAL = 60
+FEED_INTERVAL = 600  # 10 minutes
 # How many messages to inject per cycle (set 0 to disable simulation)
 SIMULATE_BATCH = 5
 

@@ -12,6 +12,9 @@ RestartSec=5
 StandardOutput=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
 StandardError=append:/home/azureuser/SMS-Spam-Detection/logs/mlflow.log
 Environment=PYTHONUNBUFFERED=1
+Environment=MLFLOW_TRACKING_USERNAME=
+Environment=MLFLOW_TRACKING_PASSWORD=
+Environment=MLFLOW_AUTH_CONFIG_PATH=/home/azureuser/SMS-Spam-Detection/mlflow_auth.ini
 
 [Install]
 WantedBy=multi-user.target

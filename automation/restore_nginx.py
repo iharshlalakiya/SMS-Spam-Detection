@@ -1,10 +1,19 @@
 """Restore all nginx configs - run: sudo python3 automation/restore_nginx.py"""
 import subprocess
 
-# Streamlit on port 80
+# Port 80: monitor at /monitor/, streamlit at /
 streamlit = """server {
     listen 80;
     server_name _;
+
+    location /monitor/ {
+        proxy_pass http://127.0.0.1:8765/;
+        proxy_set_header Host $host;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection upgrade;
+    }
+
     location / {
         proxy_pass http://127.0.0.1:8501;
         proxy_http_version 1.1;
@@ -17,7 +26,7 @@ streamlit = """server {
 }
 """
 
-# MLflow on port 5000
+# Port 5000: MLflow
 mlflow = """server {
     listen 5000;
     server_name _;
@@ -35,8 +44,8 @@ mlflow = """server {
 """
 
 open("/etc/nginx/sites-available/streamlit", "w").write(streamlit)
-open("/etc/nginx/sites-available/mlflow", "w").write(mlflow)
-open("/etc/nginx/sites-available/monitor", "w").write("")  # disable 8080
+open("/etc/nginx/sites-available/mlflow",    "w").write(mlflow)
+open("/etc/nginx/sites-available/monitor",   "w").write("")
 
 subprocess.run(["ln", "-sf", "/etc/nginx/sites-available/streamlit", "/etc/nginx/sites-enabled/streamlit"])
 subprocess.run(["ln", "-sf", "/etc/nginx/sites-available/mlflow",    "/etc/nginx/sites-enabled/mlflow"])
@@ -48,4 +57,5 @@ print(r.stdout, r.stderr)
 subprocess.run(["systemctl", "reload", "nginx"])
 print("Done!")
 print("  Streamlit → http://20.24.104.11")
+print("  Monitor   → http://20.24.104.11/monitor/")
 print("  MLflow    → http://20.24.104.11:5000")
